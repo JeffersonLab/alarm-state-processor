@@ -1,0 +1,90 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'distribution'
+    id 'com.commercehub.gradle.plugin.avro' version '0.22.0'
+    id 'com.github.jk1.dependency-license-report' version '1.16'
+}
+
+group 'org.jlab.alarms'
+version '0.1.0'
+
+ext.confluentVer = '6.0.1'
+ext.kafkaVer = '2.6.0'
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs += ["-Xlint:unchecked"]
+}
+
+repositories {
+    mavenCentral()
+
+    maven {
+        url "https://packages.confluent.io/maven"
+    }
+}
+
+dependencies {
+    implementation "org.apache.kafka:kafka-streams:" + kafkaVer,
+            "io.confluent:kafka-streams-avro-serde:" + confluentVer,
+            "org.apache.avro:avro:1.10.1",
+            "org.slf4j:slf4j-log4j12:1.7.30"
+    testImplementation "org.apache.kafka:kafka-streams-test-utils:" + kafkaVer,
+            "junit:junit:4.13.1"
+}
+
+test {
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
+}
+
+jar {
+    archiveFileName = 'alarms-filter.jar'
+}
+
+application {
+    mainClassName = 'org.jlab.alarms.AlarmsFilter'
+    applicationDefaultJvmArgs = ['-Dlog.dir=logs']
+}
+
+build {
+    dependsOn(installDist)
+}
+
+installDist.dependsOn(generateLicenseReport)
+distTar.dependsOn(generateLicenseReport)
+distZip.dependsOn(generateLicenseReport)
+
+run {
+    classpath += files('config')
+}
+
+distributions {
+    main {
+        contents {
+            from("build/reports/dependency-license") {
+                into "dependency-license"
+            }
+            from('config') {
+                into 'config'
+            }
+            from('scripts') {
+                into 'bin'
+            }
+        }
+    }
+}
+
+startScripts {
+    classpath += files('config')
+
+    // https://discuss.gradle.org/t/classpath-in-application-plugin-is-building-always-relative-to-app-home-lib-directory/2012
+    doLast {
+        def windowsScriptFile = file getWindowsScript()
+        def unixScriptFile = file getUnixScript()
+        windowsScriptFile.text = windowsScriptFile.text.replace('%APP_HOME%\\lib\\config', '%APP_HOME%\\config')
+        unixScriptFile.text = unixScriptFile.text.replace('$APP_HOME/lib/config', '$APP_HOME/config')
+    }
+}
