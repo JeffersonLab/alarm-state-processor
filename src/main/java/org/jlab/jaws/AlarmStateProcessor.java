@@ -132,8 +132,13 @@ public class AlarmStateProcessor {
         final KTable<String, RegisteredAlarm> registeredInput = builder.table(INPUT_TOPIC_REGISTERED, Consumed.with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
         final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenInput = builder.table(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
 
-        //KTable<JoinedAlarmTopicsKey, JoinedAlarmTopicsValue> joined =
-        //        activeInput.join(registeredInput, (value1, value2) -> new JoinedAlarmTopicsValue<ActiveAlarm,RegisteredAlarm>(value1,value2));
+        // I think we want outerJoin to ensure we get updates regardless if other "side" exists
+        KTable<String, JoinPair<ActiveAlarm, RegisteredAlarm>> joined =
+                activeInput.outerJoin(registeredInput, (value1, value2) -> new JoinPair<>(value1,value2));
+
+        final KTable<String, String> out = joined.mapValues(v -> v.first.toString() + " | " + v.second.toString());
+
+        out.toStream().to(OUTPUT_TOPIC, Produced.with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
 
         //final KStream<String, String> output = activeInput.join(registeredInput).toStream().transform(new MsgTransformerFactory());
 
@@ -162,6 +167,9 @@ public class AlarmStateProcessor {
 
         registeredTable.start();
 
+        final Properties props = getStreamsConfig();
+        final Topology top = createTopology(props);
+        final KafkaStreams streams = new KafkaStreams(top, props);
 
         // attach shutdown handler to catch control-c
         Runtime.getRuntime().addShutdownHook(new Thread("streams-shutdown-hook") {
