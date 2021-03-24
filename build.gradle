@@ -2,7 +2,6 @@ plugins {
     id 'java'
     id 'application'
     id 'distribution'
-    id 'com.commercehub.gradle.plugin.avro' version '0.22.0'
     id 'com.github.jk1.dependency-license-report' version '1.16'
 }
 
@@ -22,13 +21,23 @@ repositories {
     maven {
         url "https://packages.confluent.io/maven"
     }
+
+    maven {
+        name = "GitHubPackages"
+        url = uri("https://maven.pkg.github.com/JeffersonLab/jaws-libj")
+        credentials {
+            username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+            password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
+        }
+    }
 }
 
 dependencies {
     implementation "org.apache.kafka:kafka-streams:" + kafkaVer,
             "io.confluent:kafka-streams-avro-serde:" + confluentVer,
             "org.apache.avro:avro:1.10.1",
-            "org.slf4j:slf4j-log4j12:1.7.30"
+            "org.slf4j:slf4j-log4j12:1.7.30",
+            "org.jlab.jaws:jaws-libj:0.1.0"
     testImplementation "org.apache.kafka:kafka-streams-test-utils:" + kafkaVer,
             "junit:junit:4.13.1"
 }
