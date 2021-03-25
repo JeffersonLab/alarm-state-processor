@@ -1,5 +1,8 @@
 FROM gradle:6.6.1-jdk11 as builder
 
+# Build uses GitHub Packages, which unfortunately REQUIRES authentication, even to public repo
+ARG GITHUB_USERNAME
+ARG GITHUB_TOKEN
 ARG CUSTOM_CRT_URL
 
 RUN git clone https://github.com/JeffersonLab/alarm-state-processor \
