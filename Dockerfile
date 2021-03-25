@@ -18,6 +18,6 @@ RUN git clone https://github.com/JeffersonLab/alarm-state-processor \
     && cp ./docker-entrypoint.sh / \
     && rm -rf /home/gradle/alarm-state-processor
 
-WORKDIR /opt/alarm-state-processor/bin
+WORKDIR /opt/alarm-state-processor
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
