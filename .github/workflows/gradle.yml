@@ -22,3 +22,6 @@ jobs:
         java-version: 11
     - name: Build with Gradle
       run: ./gradlew build
+      env:
+        USERNAME: ${{ GITHUB_ACTOR }}
+        TOKEN: ${{ secrets.GITHUB_TOKEN }}
