@@ -156,6 +156,9 @@ public class AlarmStateProcessor {
      * @param args The command line arguments
      */
     public static void main(String[] args) {
+
+        log.info("Starting up AlarmStateProcessor");
+
         Properties adminProps = getAdminConfig();
         admin = AdminClient.create(adminProps);
 
