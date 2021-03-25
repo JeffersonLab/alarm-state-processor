@@ -5,7 +5,7 @@ plugins {
     id 'com.github.jk1.dependency-license-report' version '1.16'
 }
 
-group 'org.jlab.alarms'
+group 'org.jlab.jaws'
 version '0.1.0'
 
 ext.confluentVer = '6.0.1'
@@ -50,12 +50,12 @@ test {
 }
 
 jar {
-    archiveFileName = 'alarms-filter.jar'
+    archiveFileName = 'alarm-state-processor.jar'
 }
 
 application {
     mainClassName = 'org.jlab.jaws.AlarmStateProcessor'
-    applicationDefaultJvmArgs = ['-Dlog.dir=logs']
+    //applicationDefaultJvmArgs = ['-Dlog.dir=logs']
 }
 
 build {
