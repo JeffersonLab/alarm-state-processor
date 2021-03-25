@@ -21,7 +21,7 @@ docker-compose up
 ```
 3. Set an override
 ```
-docker exec jaws /scripts/client/set-override.py --override Disabled alarm1
+docker exec jaws /scripts/client/set-overridden.py --override Disabled alarm1
 ```
 5. Verify state
 ```
