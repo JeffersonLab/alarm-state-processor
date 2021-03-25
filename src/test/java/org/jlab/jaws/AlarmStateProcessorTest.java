@@ -23,7 +23,7 @@ public class AlarmStateProcessorTest {
     @Before
     public void setup() {
 
-        final String outTopicName = "alarms-filter-test";
+        final String outTopicName = "alarm-state-processor-test";
 
         final Properties streamsConfig = AlarmStateProcessor.getStreamsConfig();
         streamsConfig.put(SCHEMA_REGISTRY_URL_CONFIG, "mock://testing");

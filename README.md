@@ -2,11 +2,11 @@
 A [Kafka Streams](https://kafka.apache.org/documentation/streams/) application to compute alarm state and output to the _alarm-state_ topic in [JAWS](https://github.com/JeffersonLab/jaws) given _registered-alarms_, _active-alarms_, and _overridden-alarms_ topics.
 
 ---
- - [Quick Start with Compose](https://github.com/JeffersonLab/alarms-filter#quick-start-with-compose)
- - [Build](https://github.com/JeffersonLab/alarms-filter#build)
- - [Configure](https://github.com/JeffersonLab/alarms-filter#configure)
- - [Deploy](https://github.com/JeffersonLab/alarms-filter#deploy)
- - [Docker](https://github.com/JeffersonLab/alarms-filter#docker)
+ - [Quick Start with Compose](https://github.com/JeffersonLab/alarm-state-processor#quick-start-with-compose)
+ - [Build](https://github.com/JeffersonLab/alarm-state-processor#build)
+ - [Configure](https://github.com/JeffersonLab/alarm-state-processor#configure)
+ - [Deploy](https://github.com/JeffersonLab/alarm-state-processor#deploy)
+ - [Docker](https://github.com/JeffersonLab/alarm-state-processor#docker)
  ---
 
 ## Quick Start with Compose 
