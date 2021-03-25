@@ -1,4 +1,4 @@
-package org.jlab.jaws.org.jlab.jaws.client;
+package org.jlab.jaws.client;
 
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import org.jlab.jaws.eventsource.EventSourceConfig;
