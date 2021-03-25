@@ -2,6 +2,6 @@
 version: '3.8'
 
 services:
-  filter:
+  state:
     volumes:
       - ./build/install/alarm-state-processor:/opt/alarm-state-processor
