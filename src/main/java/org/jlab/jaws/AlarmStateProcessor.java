@@ -47,6 +47,8 @@ public class AlarmStateProcessor {
 
     static AdminClient admin;
 
+    static KafkaStreams streams;
+
     //static EventSourceTable<String, RegisteredAlarm> registeredTable;
     //static EventSourceTable<String, ActiveAlarm> activeTable;
     //static EventSourceTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable;
@@ -133,11 +135,28 @@ public class AlarmStateProcessor {
         KTable<String, AlarmState> joined =
                 registeredTable.outerJoin(activeTable, (registeredAlarm, activeAlarm) -> AlarmState.fromRegisteredAndActive(registeredAlarm, activeAlarm));
 
-        final KTable<String, String> out = joined.mapValues(v -> v.registeredAlarm.toString() + " | " + v.activeAlarm.toString());
+        final KTable<String, String> out = joined.mapValues(new ValueMapper<AlarmState, String>() {
+            @Override
+            public String apply(AlarmState value) {
+                String result = "null";
+
+                if(value != null) {
+                    if(value.registeredAlarm != null) {
+                        result = value.registeredAlarm.toString();
+                    }
+
+                    if(value.activeAlarm != null) {
+                        result = result + " | " + value.activeAlarm.toString();
+                    }
+                }
+
+                return result;
+            }
+        });
 
         out.toStream().to(OUTPUT_TOPIC, Produced.with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
 
-        KTable<String, ShelvedAlarm> shelvedTable = overriddenTable.toStream()
+        /*KTable<String, ShelvedAlarm> shelvedTable = overriddenTable.toStream()
                 .filter((k,v) -> {
                     return k.getType() == OverriddenAlarmType.Shelved;
                 }).map((k,v) -> {
@@ -145,7 +164,7 @@ public class AlarmStateProcessor {
                 })
                 .toTable();
 
-        KTable<String, AlarmState> joined2 =  shelvedTable.outerJoin(joined, (shelvedAlarm, alarmState) -> alarmState.addShelved(shelvedAlarm));
+        KTable<String, AlarmState> joined2 =  shelvedTable.outerJoin(joined, (shelvedAlarm, alarmState) -> alarmState.addShelved(shelvedAlarm));*/
 
         return builder.build();
     }
@@ -175,7 +194,9 @@ public class AlarmStateProcessor {
 
         final Properties props = getStreamsConfig();
         final Topology top = createTopology(props);
-        final KafkaStreams streams = new KafkaStreams(top, props);
+        streams = new KafkaStreams(top, props);
+
+        streams.start();
 
         // attach shutdown handler to catch control-c
         Runtime.getRuntime().addShutdownHook(new Thread("streams-shutdown-hook") {
@@ -199,7 +220,7 @@ public class AlarmStateProcessor {
             e.printStackTrace();
         }
 
-        //streams.close(); // blocks...
+        streams.close(); // blocks...
 
         if(admin != null) {
             admin.close();
