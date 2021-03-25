@@ -138,19 +138,13 @@ public class AlarmStateProcessor {
         final KTable<String, String> out = joined.mapValues(new ValueMapper<AlarmState, String>() {
             @Override
             public String apply(AlarmState value) {
-                String result = "null";
+                String state = "null"; // This should never happen, right?
 
                 if(value != null) {
-                    if(value.registeredAlarm != null) {
-                        result = value.registeredAlarm.toString();
-                    }
-
-                    if(value.activeAlarm != null) {
-                        result = result + " | " + value.activeAlarm.toString();
-                    }
+                    state = value.computeState();
                 }
 
-                return result;
+                return state;
             }
         });
 

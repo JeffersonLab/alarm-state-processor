@@ -23,4 +23,14 @@ public class AlarmState {
 
         return this;
     }
+
+    public String computeState() {
+        String state = "Normal";
+
+        if(activeAlarm != null) {
+            state = "Active";
+        }
+
+        return state;
+    }
 }
