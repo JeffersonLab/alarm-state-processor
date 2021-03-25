@@ -10,4 +10,5 @@ while [ $(curl -s -o /dev/null -w %{http_code} $url/subjects) -eq 000 ] ; do
   sleep 5
 done
 
-/opt/alarm-state-processor/bin/alarm-state-processor -Dlog.dir=/opt/alarm-state-processor/logs
+export ALARM_STATE_PROCESSOR_OPTS=-Dlog.dir=/opt/alarm-state-processor/logs
+/opt/alarm-state-processor/bin/alarm-state-processor
