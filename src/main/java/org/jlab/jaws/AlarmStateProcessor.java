@@ -11,13 +11,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.jlab.jaws.entity.ActiveAlarm;
-import org.jlab.jaws.entity.OverriddenAlarmKey;
-import org.jlab.jaws.entity.OverriddenAlarmValue;
+import org.jlab.jaws.entity.*;
 import org.jlab.jaws.eventsource.EventSourceConfig;
 import org.jlab.jaws.eventsource.EventSourceListener;
 import org.jlab.jaws.eventsource.EventSourceRecord;
-import org.jlab.jaws.entity.RegisteredAlarm;
 import org.jlab.jaws.eventsource.EventSourceTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,9 +47,9 @@ public class AlarmStateProcessor {
 
     static AdminClient admin;
 
-    static EventSourceTable<String, RegisteredAlarm> registeredTable;
-    static EventSourceTable<String, ActiveAlarm> activeTable;
-    static EventSourceTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable;
+    //static EventSourceTable<String, RegisteredAlarm> registeredTable;
+    //static EventSourceTable<String, ActiveAlarm> activeTable;
+    //static EventSourceTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable;
 
     final static CountDownLatch latch = new CountDownLatch(1);
 
@@ -128,21 +125,27 @@ public class AlarmStateProcessor {
         INPUT_VALUE_REGISTERED_SERDE.configure(config, false);
         INPUT_VALUE_ACTIVE_SERDE.configure(config, false);
 
-        final KTable<String, ActiveAlarm> activeInput = builder.table(INPUT_TOPIC_ACTIVE, Consumed.with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
-        final KTable<String, RegisteredAlarm> registeredInput = builder.table(INPUT_TOPIC_REGISTERED, Consumed.with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
-        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenInput = builder.table(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+        final KTable<String, RegisteredAlarm> registeredTable = builder.table(INPUT_TOPIC_REGISTERED, Consumed.with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
+        final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE, Consumed.with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
+        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
-        KTable<String, JoinPair<ActiveAlarm, RegisteredAlarm>> joined =
-                activeInput.outerJoin(registeredInput, (value1, value2) -> new JoinPair<>(value1,value2));
+        KTable<String, AlarmState> joined =
+                registeredTable.outerJoin(activeTable, (registeredAlarm, activeAlarm) -> AlarmState.fromRegisteredAndActive(registeredAlarm, activeAlarm));
 
-        final KTable<String, String> out = joined.mapValues(v -> v.first.toString() + " | " + v.second.toString());
+        final KTable<String, String> out = joined.mapValues(v -> v.registeredAlarm.toString() + " | " + v.activeAlarm.toString());
 
         out.toStream().to(OUTPUT_TOPIC, Produced.with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
 
-        //final KStream<String, String> output = activeInput.join(registeredInput).toStream().transform(new MsgTransformerFactory());
+        KTable<String, ShelvedAlarm> shelvedTable = overriddenTable.toStream()
+                .filter((k,v) -> {
+                    return k.getType() == OverriddenAlarmType.Shelved;
+                }).map((k,v) -> {
+                    return new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg());
+                })
+                .toTable();
 
-        //output.to(props.getProperty("OUTPUT_TOPIC"), Produced.with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
+        KTable<String, AlarmState> joined2 =  shelvedTable.outerJoin(joined, (shelvedAlarm, alarmState) -> alarmState.addShelved(shelvedAlarm));
 
         return builder.build();
     }
@@ -156,7 +159,7 @@ public class AlarmStateProcessor {
         Properties adminProps = getAdminConfig();
         admin = AdminClient.create(adminProps);
 
-        Properties registeredProps = getRegisteredConfig();
+        /*Properties registeredProps = getRegisteredConfig();
         registeredTable = new EventSourceTable<>(registeredProps);
 
         registeredTable.addListener(new EventSourceListener<>() {
@@ -165,7 +168,7 @@ public class AlarmStateProcessor {
             }
         });
 
-        registeredTable.start();
+        registeredTable.start();*/
 
         final Properties props = getStreamsConfig();
         final Topology top = createTopology(props);
@@ -199,9 +202,9 @@ public class AlarmStateProcessor {
             admin.close();
         }
 
-        if(registeredTable != null) {
+        /*if(registeredTable != null) {
             registeredTable.close();
-        }
+        }*/
 
         latch.countDown();
     }
