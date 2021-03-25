@@ -54,7 +54,7 @@ jar {
 }
 
 application {
-    mainClassName = 'org.jlab.alarms.AlarmsFilter'
+    mainClassName = 'org.jlab.jaws.AlarmStateProcessor'
     applicationDefaultJvmArgs = ['-Dlog.dir=logs']
 }
 
