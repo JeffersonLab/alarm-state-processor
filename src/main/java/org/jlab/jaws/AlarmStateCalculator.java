@@ -1,12 +1,10 @@
 package org.jlab.jaws;
 
-import org.jlab.jaws.entity.ActiveAlarm;
-import org.jlab.jaws.entity.DisabledAlarm;
-import org.jlab.jaws.entity.RegisteredAlarm;
-import org.jlab.jaws.entity.ShelvedAlarm;
+import org.jlab.jaws.entity.*;
 
 public class AlarmStateCalculator {
     public RegisteredAlarm registeredAlarm;
+    public LatchedAlarm latchedAlarm;
     public ActiveAlarm activeAlarm;
     public DisabledAlarm disabledAlarm;
     public ShelvedAlarm shelvedAlarm;
@@ -18,6 +16,12 @@ public class AlarmStateCalculator {
         state.activeAlarm = activeAlarm;
 
         return state;
+    }
+
+    public AlarmStateCalculator addLatched(LatchedAlarm latchedAlarm) {
+        this.latchedAlarm = latchedAlarm;
+
+        return this;
     }
 
     public AlarmStateCalculator addDisabled(DisabledAlarm disabledAlarm) {
@@ -33,20 +37,48 @@ public class AlarmStateCalculator {
     }
 
     public String computeState() {
-        String state = "Normal";
+
+        System.err.println("Computing State");
+        System.err.println("Registered: " + registeredAlarm == null);
+        System.err.println("Active:     " + activeAlarm == null);
+        System.err.println("Latched:    " + latchedAlarm == null);
+        System.err.println("Shelved:    " + shelvedAlarm == null);
+        System.err.println("Disabled:   " + disabledAlarm == null);
+
+        AlarmState state = AlarmState.Normal;
 
         if(activeAlarm != null) {
-            state = "Active";
+            state = AlarmState.Active;
+        }
+
+        if(latchedAlarm != null) {
+            if(activeAlarm != null) {
+                state = AlarmState.Latched;
+            } else {
+                state = AlarmState.InactiveLatched;
+            }
         }
 
         if(shelvedAlarm != null) {
-            state = "Shelved";
+            if(shelvedAlarm.getOneshot()) {
+                state = AlarmState.OneShotShelved;
+            } else {
+                if(activeAlarm != null) {
+                    state = AlarmState.ContinuousShelved;
+                } else {
+                    state = AlarmState.InactiveContinuousShelved;
+                }
+            }
         }
 
         if(disabledAlarm != null) {
-            state = "Disabled";
+            if(activeAlarm != null) {
+                state = AlarmState.Disabled;
+            } else {
+                state = AlarmState.InactiveDisabled;
+            }
         }
 
-        return state;
+        return state.name();
     }
 }
