@@ -4,18 +4,14 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.kstream.*;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.jlab.jaws.entity.*;
 import org.jlab.jaws.eventsource.EventSourceConfig;
-import org.jlab.jaws.eventsource.EventSourceListener;
-import org.jlab.jaws.eventsource.EventSourceRecord;
-import org.jlab.jaws.eventsource.EventSourceTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +37,8 @@ public class AlarmStateProcessor {
     public static final SpecificAvroSerde<ActiveAlarm> INPUT_VALUE_ACTIVE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<OverriddenAlarmValue> INPUT_VALUE_OVERRIDDEN_SERDE = new SpecificAvroSerde<>();
 
+
+    public static final SpecificAvroSerde<DisabledAlarm> DISABLED_VALUE_SERDE = new SpecificAvroSerde<>();
 
     public static final Serdes.StringSerde OUTPUT_KEY_SERDE = new Serdes.StringSerde();
     public static final Serdes.StringSerde OUTPUT_VALUE_SERDE = new Serdes.StringSerde();
@@ -129,15 +127,46 @@ public class AlarmStateProcessor {
 
         final KTable<String, RegisteredAlarm> registeredTable = builder.table(INPUT_TOPIC_REGISTERED, Consumed.with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
         final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE, Consumed.with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
-        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+        final KStream<OverriddenAlarmKey, OverriddenAlarmValue> overriddenStream = builder.stream(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
-        KTable<String, AlarmState> joined =
-                registeredTable.outerJoin(activeTable, (registeredAlarm, activeAlarm) -> AlarmState.fromRegisteredAndActive(registeredAlarm, activeAlarm));
+        KTable<String, AlarmStateCalculator> joined =
+                registeredTable.outerJoin(activeTable, (registeredAlarm, activeAlarm) -> AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm));
 
-        final KTable<String, String> out = joined.mapValues(new ValueMapper<AlarmState, String>() {
+        /*KTable<String, DisabledAlarm> disabledTable = overriddenStream
+                .filter((k,v) -> {
+                    System.err.println("Key: " + k);
+                    System.err.println("Value: " + v);
+                    return k.getType() == OverriddenAlarmType.Disabled;
+                })
+                .map((k,v) -> {
+                    // How the heck do you handle UNIONS?
+                    DisabledAlarm overrideRecord = null;
+                    if(v != null) {
+                        System.err.println("Msg: " + v.getMsg());
+                        if(v.getMsg() instanceof DisabledAlarm) {
+                            overrideRecord = (DisabledAlarm) v.getMsg();
+                        }
+                    }
+
+                    System.err.println("Name (key): " + k.getName());
+                    System.err.println("Disabled Record: " + overrideRecord);
+
+                    return new KeyValue<>(k.getName(), overrideRecord);
+                })
+                .selectKey((key, value) -> key)
+                .toTable(Materialized
+                        .as("disabled-store")
+                        .with(INPUT_KEY_REGISTERED_SERDE, DISABLED_VALUE_SERDE));
+
+        // Must daisy chain joins...
+        KTable<String, AlarmStateCalculator> joined2 =
+                disabledTable.outerJoin(joined, (disabledAlarm, alarmState) -> alarmState.addDisabled(disabledAlarm));*/
+
+        // Now Compute the state
+        final KTable<String, String> out = joined.mapValues(new ValueMapper<AlarmStateCalculator, String>() {
             @Override
-            public String apply(AlarmState value) {
+            public String apply(AlarmStateCalculator value) {
                 String state = "null"; // This should never happen, right?
 
                 if(value != null) {
@@ -149,16 +178,6 @@ public class AlarmStateProcessor {
         });
 
         out.toStream().to(OUTPUT_TOPIC, Produced.with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
-
-        /*KTable<String, ShelvedAlarm> shelvedTable = overriddenTable.toStream()
-                .filter((k,v) -> {
-                    return k.getType() == OverriddenAlarmType.Shelved;
-                }).map((k,v) -> {
-                    return new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg());
-                })
-                .toTable();
-
-        KTable<String, AlarmState> joined2 =  shelvedTable.outerJoin(joined, (shelvedAlarm, alarmState) -> alarmState.addShelved(shelvedAlarm));*/
 
         return builder.build();
     }
