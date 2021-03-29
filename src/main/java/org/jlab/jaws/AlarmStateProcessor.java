@@ -102,6 +102,9 @@ public class AlarmStateProcessor {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0); // Disable caching
         props.put(SCHEMA_REGISTRY_URL_CONFIG, registry);
 
+        // https://stackoverflow.com/questions/57164133/kafka-stream-topology-optimization
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
@@ -119,6 +122,8 @@ public class AlarmStateProcessor {
         Map<String, String> config = new HashMap<>();
         config.put(SCHEMA_REGISTRY_URL_CONFIG, props.getProperty(SCHEMA_REGISTRY_URL_CONFIG));
 
+        DISABLED_VALUE_SERDE.configure(config, false);
+
         INPUT_KEY_OVERRIDDEN_SERDE.configure(config, true);
         INPUT_VALUE_OVERRIDDEN_SERDE.configure(config, false);
 
@@ -127,11 +132,35 @@ public class AlarmStateProcessor {
 
         final KTable<String, RegisteredAlarm> registeredTable = builder.table(INPUT_TOPIC_REGISTERED, Consumed.with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
         final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE, Consumed.with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
-        final KStream<OverriddenAlarmKey, OverriddenAlarmValue> overriddenStream = builder.stream(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+        //final KStream<OverriddenAlarmKey, OverriddenAlarmValue> overriddenStream = builder.stream(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+
+
+
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
         KTable<String, AlarmStateCalculator> joined =
                 registeredTable.outerJoin(activeTable, (registeredAlarm, activeAlarm) -> AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm));
+
+
+
+        KTable<String, DisabledAlarm> disabledTable = overriddenTable.filter((k,v) -> {
+                    System.err.println("Key: " + k);
+                    System.err.println("Value: " + v);
+                    return k.getType() == OverriddenAlarmType.Disabled;
+                })
+                .groupBy((k,v)-> new KeyValue<>(k.getName(), (DisabledAlarm)v.getMsg()), Grouped.with(Serdes.String(), DISABLED_VALUE_SERDE))
+                .aggregate(
+                        DisabledAlarm::new,
+                        (key, value, obj) -> {
+                            return value;
+                        },
+                        (key, value, obj) -> {
+                            return value;
+                        },
+                        Materialized.with(Serdes.String(), DISABLED_VALUE_SERDE)
+                );
+
 
         /*KTable<String, DisabledAlarm> disabledTable = overriddenStream
                 .filter((k,v) -> {
@@ -140,7 +169,6 @@ public class AlarmStateProcessor {
                     return k.getType() == OverriddenAlarmType.Disabled;
                 })
                 .map((k,v) -> {
-                    // How the heck do you handle UNIONS?
                     DisabledAlarm overrideRecord = null;
                     if(v != null) {
                         System.err.println("Msg: " + v.getMsg());
@@ -154,17 +182,16 @@ public class AlarmStateProcessor {
 
                     return new KeyValue<>(k.getName(), overrideRecord);
                 })
-                .selectKey((key, value) -> key)
                 .toTable(Materialized
                         .as("disabled-store")
-                        .with(INPUT_KEY_REGISTERED_SERDE, DISABLED_VALUE_SERDE));
+                        .with(INPUT_KEY_REGISTERED_SERDE, DISABLED_VALUE_SERDE));*/
 
         // Must daisy chain joins...
         KTable<String, AlarmStateCalculator> joined2 =
-                disabledTable.outerJoin(joined, (disabledAlarm, alarmState) -> alarmState.addDisabled(disabledAlarm));*/
+                disabledTable.outerJoin(joined, (disabledAlarm, alarmState) -> alarmState.addDisabled(disabledAlarm));
 
         // Now Compute the state
-        final KTable<String, String> out = joined.mapValues(new ValueMapper<AlarmStateCalculator, String>() {
+        final KTable<String, String> out = joined2.mapValues(new ValueMapper<AlarmStateCalculator, String>() {
             @Override
             public String apply(AlarmStateCalculator value) {
                 String state = "null"; // This should never happen, right?
