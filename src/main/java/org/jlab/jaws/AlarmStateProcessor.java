@@ -95,8 +95,34 @@ public class AlarmStateProcessor {
                 Consumed.as("Registered-Table").with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
         final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE,
                 Consumed.as("Active-Table").with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
-        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN,
-                Consumed.as("Overridden-Table").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+        //final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN,
+        //        Consumed.as("Overridden-Table").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+
+        final KStream<OverriddenAlarmKey, OverriddenAlarmValue> overriddenStream = builder.stream(INPUT_TOPIC_OVERRIDDEN,
+                Consumed.as("Overridden-Stream").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+
+        @SuppressWarnings("unchecked")
+        KStream<OverriddenAlarmKey, OverriddenAlarmValue>[] overrideArray = overriddenStream.branch(
+                Named.as("Split-Overrides"),
+                (key, value) -> key.getType() == OverriddenAlarmType.Disabled,
+                (key, value) -> key.getType() == OverriddenAlarmType.Shelved
+        );
+
+        KStream<String, DisabledAlarm> disabledStream = overrideArray[0]
+                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, DisabledAlarm>>)
+                        (key, value) -> new KeyValue<>(key.getName(), toDisabledAlarm(value)),
+                Named.as("Disabled-Map"));
+
+        KStream<String, ShelvedAlarm> shelvedStream = overrideArray[1]
+                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, ShelvedAlarm>>)
+                        (key, value) -> new KeyValue<>(key.getName(), toShelvedAlarm(value)),
+                Named.as("Shelved-Map"));
+
+        KTable<String, DisabledAlarm> disabledTable = disabledStream.toTable(Materialized.as("Disabled-Table")
+                .with(Serdes.String(), DISABLED_VALUE_SERDE));
+
+        KTable<String, ShelvedAlarm> shelvedTable = shelvedStream.toTable(Materialized.as("Shelved-Table")
+                .with(Serdes.String(), SHELVED_VALUE_SERDE));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
         KTable<String, AlarmStateCalculator> joined = registeredTable
@@ -105,54 +131,11 @@ public class AlarmStateProcessor {
                                 AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm),
                         Named.as("Registered-and-Active-Table"));
 
-        KTable<String, DisabledAlarm> disabledTable = overriddenTable.filter((k,v) -> {
-                    //System.err.println("Key: " + k);
-                    //System.err.println("Value: " + v);
-                    return k.getType() == OverriddenAlarmType.Disabled;
-                }, Named.as("Disabled-Filter"))
-                .groupBy((k,v)-> new KeyValue<>(k.getName(), (DisabledAlarm)v.getMsg()), Grouped.as("Disabled-Group")
-                        .with(Serdes.String(), DISABLED_VALUE_SERDE))
-                .aggregate(
-                        new Initializer<DisabledAlarm>() {
-                            @Override
-                            public DisabledAlarm apply() {
-                                log.warn("Disabled Initializer");
-                                return null;
-                            }
-                        },
-                        new Aggregator<String, DisabledAlarm, DisabledAlarm>() { // add
-                            @Override
-                            public DisabledAlarm apply(String key, DisabledAlarm newValue, DisabledAlarm aggregate) {
-                                log.warn("Disabled Adder: {}", newValue);
-                                return newValue;
-                            }
-                        },
-                        new Aggregator<String, DisabledAlarm, DisabledAlarm>() { // subtract
-                            @Override
-                            public DisabledAlarm apply(String key, DisabledAlarm oldValue, DisabledAlarm aggregate) {
-                                log.warn("Disabled Subtractor: {}", oldValue);
-                                return null;
-                            }
-                        },
-                        Materialized.as("Disabled-Store").with(Serdes.String(), DISABLED_VALUE_SERDE)
-                );
-
         // Daisy chain joins
         KTable<String, AlarmStateCalculator> joined2 = disabledTable
                 .outerJoin(joined, (disabledAlarm, alarmState) ->
                         alarmState.addDisabled(disabledAlarm),
                         Named.as("Plus-Disabled"));
-
-        KTable<String, ShelvedAlarm> shelvedTable = overriddenTable
-                .filter((k,v) -> k.getType() == OverriddenAlarmType.Shelved, Named.as("Shelved-Filter"))
-                .groupBy((k,v)-> new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg()), Grouped.as("Shelved-Group")
-                        .with(Serdes.String(), SHELVED_VALUE_SERDE))
-                .aggregate(
-                        () -> null,
-                        (key, newValue, aggregate) -> newValue,
-                        (key, oldValue, aggregate) -> null,
-                        Materialized.as("Shelved-Store").with(Serdes.String(), SHELVED_VALUE_SERDE)
-                );
 
         // Daisy chain joins
         KTable<String, AlarmStateCalculator> joined3 = shelvedTable
@@ -182,6 +165,26 @@ public class AlarmStateProcessor {
                 .with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
 
         return builder.build();
+    }
+
+    private static DisabledAlarm toDisabledAlarm(OverriddenAlarmValue value) {
+        DisabledAlarm alarm = null;
+
+        if(value != null && value.getMsg() instanceof DisabledAlarm) {
+            alarm = (DisabledAlarm)value.getMsg();
+        }
+
+        return alarm;
+    }
+
+    private static ShelvedAlarm toShelvedAlarm(OverriddenAlarmValue value) {
+        ShelvedAlarm alarm = null;
+
+        if(value != null && value.getMsg() instanceof ShelvedAlarm) {
+            alarm = (ShelvedAlarm)value.getMsg();
+        }
+
+        return alarm;
     }
 
     /**
