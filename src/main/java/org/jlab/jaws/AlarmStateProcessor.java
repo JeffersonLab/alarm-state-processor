@@ -91,20 +91,24 @@ public class AlarmStateProcessor {
         INPUT_VALUE_REGISTERED_SERDE.configure(config, false);
         INPUT_VALUE_ACTIVE_SERDE.configure(config, false);
 
-        final KTable<String, RegisteredAlarm> registeredTable = builder.table(INPUT_TOPIC_REGISTERED, Consumed.with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
-        final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE, Consumed.with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
-        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN, Consumed.with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
+        final KTable<String, RegisteredAlarm> registeredTable = builder.table(INPUT_TOPIC_REGISTERED, Consumed.as("Registered-Table").with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
+        final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE, Consumed.as("Active-Table").with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
+        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN, Consumed.as("Overridden-Table").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
-        KTable<String, AlarmStateCalculator> joined =
-                registeredTable.outerJoin(activeTable, (registeredAlarm, activeAlarm) -> AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm));
+        KTable<String, AlarmStateCalculator> joined = registeredTable
+                .outerJoin(activeTable,
+                        (registeredAlarm, activeAlarm) ->
+                                AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm),
+                        Named.as("Registered-and-Active-Table"));
 
         KTable<String, DisabledAlarm> disabledTable = overriddenTable.filter((k,v) -> {
                     //System.err.println("Key: " + k);
                     //System.err.println("Value: " + v);
                     return k.getType() == OverriddenAlarmType.Disabled;
-                })
-                .groupBy((k,v)-> new KeyValue<>(k.getName(), (DisabledAlarm)v.getMsg()), Grouped.with(Serdes.String(), DISABLED_VALUE_SERDE))
+                }, Named.as("Disabled-Filter"))
+                .groupBy((k,v)-> new KeyValue<>(k.getName(), (DisabledAlarm)v.getMsg()), Grouped.as("Disabled-Group")
+                        .with(Serdes.String(), DISABLED_VALUE_SERDE))
                 .aggregate(
                         new Initializer<DisabledAlarm>() {
                             @Override
@@ -127,29 +131,35 @@ public class AlarmStateProcessor {
                                 return null;
                             }
                         },
-                        Materialized.with(Serdes.String(), DISABLED_VALUE_SERDE)
+                        Materialized.as("Disabled-Store").with(Serdes.String(), DISABLED_VALUE_SERDE)
                 );
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> joined2 =
-                disabledTable.outerJoin(joined, (disabledAlarm, alarmState) -> alarmState.addDisabled(disabledAlarm));
+        KTable<String, AlarmStateCalculator> joined2 = disabledTable
+                .outerJoin(joined, (disabledAlarm, alarmState) ->
+                        alarmState.addDisabled(disabledAlarm),
+                        Named.as("Plus-Disabled"));
 
         KTable<String, ShelvedAlarm> shelvedTable = overriddenTable
-                .filter((k,v) -> k.getType() == OverriddenAlarmType.Shelved)
-                .groupBy((k,v)-> new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg()), Grouped.with(Serdes.String(), SHELVED_VALUE_SERDE))
+                .filter((k,v) -> k.getType() == OverriddenAlarmType.Shelved, Named.as("Shelved-Filter"))
+                .groupBy((k,v)-> new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg()), Grouped.as("Shelved-Group")
+                        .with(Serdes.String(), SHELVED_VALUE_SERDE))
                 .aggregate(
                         () -> null,
                         (key, newValue, aggregate) -> newValue,
                         (key, oldValue, aggregate) -> null,
-                        Materialized.with(Serdes.String(), SHELVED_VALUE_SERDE)
+                        Materialized.as("Shelved-Store").with(Serdes.String(), SHELVED_VALUE_SERDE)
                 );
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> joined3 =
-                shelvedTable.outerJoin(joined2, (shelvedAlarm, alarmState) -> alarmState.addShelved(shelvedAlarm));
+        KTable<String, AlarmStateCalculator> joined3 = shelvedTable
+                .outerJoin(joined2, (shelvedAlarm, alarmState) ->
+                        alarmState.addShelved(shelvedAlarm),
+                        Named.as("Plus-Shelved"));
 
         // Assign names for AlarmStateCalculator to access (debugging)
-        KTable<String, AlarmStateCalculator> named = joined3.transformValues(new MsgTransformerFactory());
+        KTable<String, AlarmStateCalculator> named = joined3
+                .transformValues(new MsgTransformerFactory(), Named.as("Key-Added-to-Value"));
 
         // Now Compute the state
         final KTable<String, String> out = named.mapValues(new ValueMapper<AlarmStateCalculator, String>() {
@@ -163,9 +173,10 @@ public class AlarmStateProcessor {
 
                 return state;
             }
-        });
+        }, Named.as("Compute-State"));
 
-        out.toStream().to(OUTPUT_TOPIC, Produced.with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
+        out.toStream(Named.as("State-Stream")).to(OUTPUT_TOPIC, Produced.as("State-Sink")
+                .with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
 
         return builder.build();
     }
@@ -182,6 +193,9 @@ public class AlarmStateProcessor {
         final Properties props = getStreamsConfig();
         final Topology top = createTopology(props);
         streams = new KafkaStreams(top, props);
+
+        // View output at: https://zz85.github.io/kafka-streams-viz/
+        log.info(top.describe().toString());
 
         streams.start();
 

@@ -29,10 +29,16 @@ public class AlarmStateProcessorTest {
         streamsConfig.put(SCHEMA_REGISTRY_URL_CONFIG, "mock://testing");
         final Topology top = AlarmStateProcessor.createTopology(streamsConfig);
         testDriver = new TopologyTestDriver(top, streamsConfig);
+        System.out.println(top.describe().toString());
     }
 
     @After
     public void tearDown() {
         testDriver.close();
+    }
+
+    @Test
+    public void dumpTopology() {
+
     }
 }
