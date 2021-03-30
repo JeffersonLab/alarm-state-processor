@@ -65,6 +65,10 @@ public class AlarmStateProcessor {
         // https://stackoverflow.com/questions/57164133/kafka-stream-topology-optimization
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0); // Disables caching
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 200);
+        //props.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 100);
+
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
@@ -106,12 +110,23 @@ public class AlarmStateProcessor {
                 })
                 .groupBy((k,v)-> new KeyValue<>(k.getName(), (DisabledAlarm)v.getMsg()), Grouped.with(Serdes.String(), DISABLED_VALUE_SERDE))
                 .aggregate(
-                        DisabledAlarm::new,
-                        (key, value, obj) -> {
-                            return value;
+                        new Initializer<DisabledAlarm>() {
+                            @Override
+                            public DisabledAlarm apply() {
+                                return null;
+                            }
                         },
-                        (key, value, obj) -> {
-                            return value;
+                        new Aggregator<String, DisabledAlarm, DisabledAlarm>() { // add
+                            @Override
+                            public DisabledAlarm apply(String key, DisabledAlarm newValue, DisabledAlarm aggregate) {
+                                return newValue;
+                            }
+                        },
+                        new Aggregator<String, DisabledAlarm, DisabledAlarm>() { // subtract
+                            @Override
+                            public DisabledAlarm apply(String key, DisabledAlarm oldValue, DisabledAlarm aggregate) {
+                                return null;
+                            }
                         },
                         Materialized.with(Serdes.String(), DISABLED_VALUE_SERDE)
                 );
@@ -120,20 +135,13 @@ public class AlarmStateProcessor {
         KTable<String, AlarmStateCalculator> joined2 =
                 disabledTable.outerJoin(joined, (disabledAlarm, alarmState) -> alarmState.addDisabled(disabledAlarm));
 
-        KTable<String, ShelvedAlarm> shelvedTable = overriddenTable.filter((k,v) -> {
-            //System.err.println("Key: " + k);
-            //System.err.println("Value: " + v);
-            return k.getType() == OverriddenAlarmType.Shelved;
-        })
+        KTable<String, ShelvedAlarm> shelvedTable = overriddenTable
+                .filter((k,v) -> k.getType() == OverriddenAlarmType.Shelved)
                 .groupBy((k,v)-> new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg()), Grouped.with(Serdes.String(), SHELVED_VALUE_SERDE))
                 .aggregate(
-                        ShelvedAlarm::new,
-                        (key, value, obj) -> {
-                            return value;
-                        },
-                        (key, value, obj) -> {
-                            return value;
-                        },
+                        null,
+                        (key, newValue, aggregate) -> newValue,
+                        (key, oldValue, aggregate) -> null,
                         Materialized.with(Serdes.String(), SHELVED_VALUE_SERDE)
                 );
 
