@@ -1,16 +1,12 @@
 package org.jlab.jaws;
 
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.jlab.jaws.entity.*;
-import org.jlab.jaws.eventsource.EventSourceConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
