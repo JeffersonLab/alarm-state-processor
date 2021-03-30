@@ -1,13 +1,18 @@
 package org.jlab.jaws;
 
 import org.jlab.jaws.entity.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AlarmStateCalculator {
+    private static final Logger log = LoggerFactory.getLogger(AlarmStateCalculator.class);
+
     private RegisteredAlarm registeredAlarm;
     private LatchedAlarm latchedAlarm;
     private ActiveAlarm activeAlarm;
     private DisabledAlarm disabledAlarm;
     private ShelvedAlarm shelvedAlarm;
+    private String alarmName;
 
     public static AlarmStateCalculator fromRegisteredAndActive(RegisteredAlarm registeredAlarm, ActiveAlarm activeAlarm) {
         AlarmStateCalculator state = new AlarmStateCalculator();
@@ -38,12 +43,12 @@ public class AlarmStateCalculator {
 
     public String computeState() {
 
-        System.err.println("Computing State");
-        System.err.println("Registered: " + registeredAlarm != null);
-        System.err.println("Active:     " + activeAlarm != null);
-        System.err.println("Latched:    " + latchedAlarm != null);
-        System.err.println("Shelved:    " + shelvedAlarm != null);
-        System.err.println("Disabled:   " + disabledAlarm != null);
+        log.info("Computing State for: {}", alarmName);
+        log.info("Registered: {}", registeredAlarm != null);
+        log.info("Active:     {}", activeAlarm != null);
+        log.info("Latched:    {}", latchedAlarm != null);
+        log.info("Shelved:    {}", shelvedAlarm != null);
+        log.info("Disabled:   {}", disabledAlarm != null);
 
         AlarmState state = AlarmState.Normal;
 
@@ -80,5 +85,9 @@ public class AlarmStateCalculator {
         }
 
         return state.name();
+    }
+
+    public void setAlarmName(String alarmName) {
+        this.alarmName = alarmName;
     }
 }

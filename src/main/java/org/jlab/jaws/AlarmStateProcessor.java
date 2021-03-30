@@ -8,6 +8,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.jlab.jaws.entity.*;
 import org.jlab.jaws.eventsource.EventSourceConfig;
 import org.slf4j.Logger;
@@ -99,8 +100,8 @@ public class AlarmStateProcessor {
                 registeredTable.outerJoin(activeTable, (registeredAlarm, activeAlarm) -> AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm));
 
         KTable<String, DisabledAlarm> disabledTable = overriddenTable.filter((k,v) -> {
-                    System.err.println("Key: " + k);
-                    System.err.println("Value: " + v);
+                    //System.err.println("Key: " + k);
+                    //System.err.println("Value: " + v);
                     return k.getType() == OverriddenAlarmType.Disabled;
                 })
                 .groupBy((k,v)-> new KeyValue<>(k.getName(), (DisabledAlarm)v.getMsg()), Grouped.with(Serdes.String(), DISABLED_VALUE_SERDE))
@@ -120,8 +121,8 @@ public class AlarmStateProcessor {
                 disabledTable.outerJoin(joined, (disabledAlarm, alarmState) -> alarmState.addDisabled(disabledAlarm));
 
         KTable<String, ShelvedAlarm> shelvedTable = overriddenTable.filter((k,v) -> {
-            System.err.println("Key: " + k);
-            System.err.println("Value: " + v);
+            //System.err.println("Key: " + k);
+            //System.err.println("Value: " + v);
             return k.getType() == OverriddenAlarmType.Shelved;
         })
                 .groupBy((k,v)-> new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg()), Grouped.with(Serdes.String(), SHELVED_VALUE_SERDE))
@@ -140,8 +141,11 @@ public class AlarmStateProcessor {
         KTable<String, AlarmStateCalculator> joined3 =
                 shelvedTable.outerJoin(joined2, (shelvedAlarm, alarmState) -> alarmState.addShelved(shelvedAlarm));
 
+        // Assign names for AlarmStateCalculator to access (debugging)
+        KTable<String, AlarmStateCalculator> named = joined3.transformValues(new MsgTransformerFactory());
+
         // Now Compute the state
-        final KTable<String, String> out = joined3.mapValues(new ValueMapper<AlarmStateCalculator, String>() {
+        final KTable<String, String> out = named.mapValues(new ValueMapper<AlarmStateCalculator, String>() {
             @Override
             public String apply(AlarmStateCalculator value) {
                 String state = "null"; // This should never happen, right?
@@ -199,5 +203,31 @@ public class AlarmStateProcessor {
         streams.close(); // blocks...
 
         latch.countDown();
+    }
+
+    private static final class MsgTransformerFactory implements ValueTransformerWithKeySupplier<String, AlarmStateCalculator, AlarmStateCalculator> {
+
+
+        @Override
+        public ValueTransformerWithKey<String, AlarmStateCalculator, AlarmStateCalculator> get() {
+            return new ValueTransformerWithKey<>() {
+                @Override
+                public void init(ProcessorContext context) {
+
+                }
+
+                @Override
+                public AlarmStateCalculator transform(String readOnlyKey, AlarmStateCalculator value) {
+                    value.setAlarmName(readOnlyKey);
+
+                    return value;
+                }
+
+                @Override
+                public void close() {
+
+                }
+            };
+        }
     }
 }
