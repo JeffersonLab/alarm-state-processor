@@ -109,18 +109,21 @@ public class AlarmStateProcessor {
                         new Initializer<DisabledAlarm>() {
                             @Override
                             public DisabledAlarm apply() {
+                                log.warn("Disabled Initializer");
                                 return null;
                             }
                         },
                         new Aggregator<String, DisabledAlarm, DisabledAlarm>() { // add
                             @Override
                             public DisabledAlarm apply(String key, DisabledAlarm newValue, DisabledAlarm aggregate) {
+                                log.warn("Disabled Adder: {}", newValue);
                                 return newValue;
                             }
                         },
                         new Aggregator<String, DisabledAlarm, DisabledAlarm>() { // subtract
                             @Override
                             public DisabledAlarm apply(String key, DisabledAlarm oldValue, DisabledAlarm aggregate) {
+                                log.warn("Disabled Subtractor: {}", oldValue);
                                 return null;
                             }
                         },
@@ -135,7 +138,7 @@ public class AlarmStateProcessor {
                 .filter((k,v) -> k.getType() == OverriddenAlarmType.Shelved)
                 .groupBy((k,v)-> new KeyValue<>(k.getName(), (ShelvedAlarm)v.getMsg()), Grouped.with(Serdes.String(), SHELVED_VALUE_SERDE))
                 .aggregate(
-                        null,
+                        () -> null,
                         (key, newValue, aggregate) -> newValue,
                         (key, oldValue, aggregate) -> null,
                         Materialized.with(Serdes.String(), SHELVED_VALUE_SERDE)
