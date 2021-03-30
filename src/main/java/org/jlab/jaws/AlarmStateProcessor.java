@@ -136,32 +136,32 @@ public class AlarmStateProcessor {
                 .with(Serdes.String(), LATCHED_VALUE_SERDE));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
-        KTable<String, AlarmStateCalculator> joined = registeredTable
+        KTable<String, AlarmStateCalculator> registeredAndActive = registeredTable
                 .outerJoin(activeTable,
                         (registeredAlarm, activeAlarm) ->
                                 AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm),
                         Named.as("Registered-and-Active-Table"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> joined2 = disabledTable
-                .outerJoin(joined, (disabledAlarm, alarmState) ->
+        KTable<String, AlarmStateCalculator> plusDisabled = registeredAndActive
+                .leftJoin(disabledTable, (alarmState, disabledAlarm) ->
                         alarmState.setDisabled(disabledAlarm),
                         Named.as("Plus-Disabled"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> joined3 = shelvedTable
-                .outerJoin(joined2, (shelvedAlarm, alarmState) ->
+        KTable<String, AlarmStateCalculator> plusShelving = plusDisabled
+                .leftJoin(shelvedTable, (alarmState, shelvedAlarm) ->
                         alarmState.setShelved(shelvedAlarm),
                         Named.as("Plus-Shelved"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> joined4 = latchedTable
-                .outerJoin(joined3, (latchedAlarm, alarmState) ->
+        KTable<String, AlarmStateCalculator> plusLatched = plusShelving
+                .leftJoin(latchedTable, (alarmState, latchedAlarm) ->
                                 alarmState.setLatched(latchedAlarm),
                         Named.as("Plus-Latched"));
 
         // Assign names for AlarmStateCalculator to access (debugging)
-        KTable<String, AlarmStateCalculator> named = joined4
+        KTable<String, AlarmStateCalculator> named = plusLatched
                 .transformValues(new MsgTransformerFactory(), Named.as("Key-Added-to-Value"));
 
         // Now Compute the state

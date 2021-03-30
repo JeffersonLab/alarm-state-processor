@@ -17,6 +17,8 @@ public class AlarmStateCalculator {
     public static AlarmStateCalculator fromRegisteredAndActive(RegisteredAlarm registeredAlarm, ActiveAlarm activeAlarm) {
         AlarmStateCalculator state = new AlarmStateCalculator();
 
+        log.warn("fromRegisteredAndActive: {}, {}", registeredAlarm != null, activeAlarm != null);
+
         state.registeredAlarm = registeredAlarm;
         state.activeAlarm = activeAlarm;
 
@@ -28,18 +30,21 @@ public class AlarmStateCalculator {
     }
 
     public AlarmStateCalculator setLatched(LatchedAlarm latchedAlarm) {
+        log.warn("Setting Latched: {}", latchedAlarm != null);
         this.latchedAlarm = latchedAlarm;
 
         return this;
     }
 
     public AlarmStateCalculator setDisabled(DisabledAlarm disabledAlarm) {
+        log.warn("Setting Disabled: {}", disabledAlarm != null);
         this.disabledAlarm = disabledAlarm;
 
         return this;
     }
 
     public AlarmStateCalculator setShelved(ShelvedAlarm shelvedAlarm) {
+        log.warn("Setting Shelved: {}", shelvedAlarm != null);
         this.shelvedAlarm = shelvedAlarm;
 
         return this;
