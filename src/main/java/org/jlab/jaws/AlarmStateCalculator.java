@@ -23,19 +23,23 @@ public class AlarmStateCalculator {
         return state;
     }
 
-    public AlarmStateCalculator addLatched(LatchedAlarm latchedAlarm) {
+    public void setAlarmName(String alarmName) {
+        this.alarmName = alarmName;
+    }
+
+    public AlarmStateCalculator setLatched(LatchedAlarm latchedAlarm) {
         this.latchedAlarm = latchedAlarm;
 
         return this;
     }
 
-    public AlarmStateCalculator addDisabled(DisabledAlarm disabledAlarm) {
+    public AlarmStateCalculator setDisabled(DisabledAlarm disabledAlarm) {
         this.disabledAlarm = disabledAlarm;
 
         return this;
     }
 
-    public AlarmStateCalculator addShelved(ShelvedAlarm shelvedAlarm) {
+    public AlarmStateCalculator setShelved(ShelvedAlarm shelvedAlarm) {
         this.shelvedAlarm = shelvedAlarm;
 
         return this;
@@ -85,9 +89,5 @@ public class AlarmStateCalculator {
         }
 
         return state.name();
-    }
-
-    public void setAlarmName(String alarmName) {
-        this.alarmName = alarmName;
     }
 }

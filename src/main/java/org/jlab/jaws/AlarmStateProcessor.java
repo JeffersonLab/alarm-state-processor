@@ -32,6 +32,7 @@ public class AlarmStateProcessor {
     public static final SpecificAvroSerde<ActiveAlarm> INPUT_VALUE_ACTIVE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<OverriddenAlarmValue> INPUT_VALUE_OVERRIDDEN_SERDE = new SpecificAvroSerde<>();
 
+    public static final SpecificAvroSerde<LatchedAlarm> LATCHED_VALUE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<DisabledAlarm> DISABLED_VALUE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<ShelvedAlarm> SHELVED_VALUE_SERDE = new SpecificAvroSerde<>();
 
@@ -82,6 +83,7 @@ public class AlarmStateProcessor {
         Map<String, String> config = new HashMap<>();
         config.put(SCHEMA_REGISTRY_URL_CONFIG, props.getProperty(SCHEMA_REGISTRY_URL_CONFIG));
 
+        LATCHED_VALUE_SERDE.configure(config, false);
         DISABLED_VALUE_SERDE.configure(config, false);
         SHELVED_VALUE_SERDE.configure(config, false);
 
@@ -105,7 +107,8 @@ public class AlarmStateProcessor {
         KStream<OverriddenAlarmKey, OverriddenAlarmValue>[] overrideArray = overriddenStream.branch(
                 Named.as("Split-Overrides"),
                 (key, value) -> key.getType() == OverriddenAlarmType.Disabled,
-                (key, value) -> key.getType() == OverriddenAlarmType.Shelved
+                (key, value) -> key.getType() == OverriddenAlarmType.Shelved,
+                (key, value) -> key.getType() == OverriddenAlarmType.Latched
         );
 
         KStream<String, DisabledAlarm> disabledStream = overrideArray[0]
@@ -118,11 +121,19 @@ public class AlarmStateProcessor {
                         (key, value) -> new KeyValue<>(key.getName(), toShelvedAlarm(value)),
                 Named.as("Shelved-Map"));
 
+        KStream<String, LatchedAlarm> latchedStream = overrideArray[2]
+                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, LatchedAlarm>>)
+                                (key, value) -> new KeyValue<>(key.getName(), toLatchedAlarm(value)),
+                        Named.as("Latched-Map"));
+
         KTable<String, DisabledAlarm> disabledTable = disabledStream.toTable(Materialized.as("Disabled-Table")
                 .with(Serdes.String(), DISABLED_VALUE_SERDE));
 
         KTable<String, ShelvedAlarm> shelvedTable = shelvedStream.toTable(Materialized.as("Shelved-Table")
                 .with(Serdes.String(), SHELVED_VALUE_SERDE));
+
+        KTable<String, LatchedAlarm> latchedTable = latchedStream.toTable(Materialized.as("Latched-Table")
+                .with(Serdes.String(), LATCHED_VALUE_SERDE));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
         KTable<String, AlarmStateCalculator> joined = registeredTable
@@ -134,17 +145,23 @@ public class AlarmStateProcessor {
         // Daisy chain joins
         KTable<String, AlarmStateCalculator> joined2 = disabledTable
                 .outerJoin(joined, (disabledAlarm, alarmState) ->
-                        alarmState.addDisabled(disabledAlarm),
+                        alarmState.setDisabled(disabledAlarm),
                         Named.as("Plus-Disabled"));
 
         // Daisy chain joins
         KTable<String, AlarmStateCalculator> joined3 = shelvedTable
                 .outerJoin(joined2, (shelvedAlarm, alarmState) ->
-                        alarmState.addShelved(shelvedAlarm),
+                        alarmState.setShelved(shelvedAlarm),
                         Named.as("Plus-Shelved"));
 
+        // Daisy chain joins
+        KTable<String, AlarmStateCalculator> joined4 = latchedTable
+                .outerJoin(joined3, (latchedAlarm, alarmState) ->
+                                alarmState.setLatched(latchedAlarm),
+                        Named.as("Plus-Latched"));
+
         // Assign names for AlarmStateCalculator to access (debugging)
-        KTable<String, AlarmStateCalculator> named = joined3
+        KTable<String, AlarmStateCalculator> named = joined4
                 .transformValues(new MsgTransformerFactory(), Named.as("Key-Added-to-Value"));
 
         // Now Compute the state
@@ -165,6 +182,16 @@ public class AlarmStateProcessor {
                 .with(OUTPUT_KEY_SERDE, OUTPUT_VALUE_SERDE));
 
         return builder.build();
+    }
+
+    private static LatchedAlarm toLatchedAlarm(OverriddenAlarmValue value) {
+        LatchedAlarm alarm = null;
+
+        if(value != null && value.getMsg() instanceof LatchedAlarm) {
+            alarm = (LatchedAlarm) value.getMsg();
+        }
+
+        return alarm;
     }
 
     private static DisabledAlarm toDisabledAlarm(OverriddenAlarmValue value) {
