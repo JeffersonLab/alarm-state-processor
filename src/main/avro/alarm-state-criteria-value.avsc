@@ -1,0 +1,49 @@
+{
+  "type": "record",
+  "name": "AlarmStateCriteria",
+  "namespace": "org.jlab.jaws.entity",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "default": "Unspecified",
+      "doc": "name of the alarm (key inside value)"
+    },
+    {
+      "name": "registered",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if registered"
+    },
+    {
+      "name": "active",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if active"
+    },
+    {
+      "name": "disabled",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if disabled"
+    },
+    {
+      "name": "latched",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if latched"
+    },
+    {
+      "name": "shelved",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if shelved"
+    },
+    {
+      "name": "oneshot",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if one shot shelved"
+    }
+  ]
+}

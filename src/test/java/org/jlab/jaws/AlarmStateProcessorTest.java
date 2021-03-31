@@ -106,6 +106,6 @@ public class AlarmStateProcessorTest {
 
         KeyValue<String, String> result = outList.get(2);
         Assert.assertEquals("alarm1", result.key);
-        //Assert.assertEquals("Disabled", result.value);
+        Assert.assertEquals("Disabled", result.value);
     }
 }

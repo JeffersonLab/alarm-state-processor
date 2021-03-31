@@ -7,77 +7,72 @@ import org.slf4j.LoggerFactory;
 public class AlarmStateCalculator {
     private static final Logger log = LoggerFactory.getLogger(AlarmStateCalculator.class);
 
-    private RegisteredAlarm registeredAlarm;
-    private LatchedAlarm latchedAlarm;
-    private ActiveAlarm activeAlarm;
-    private DisabledAlarm disabledAlarm;
-    private ShelvedAlarm shelvedAlarm;
-    private String alarmName;
+    private AlarmStateCriteria criteria = new AlarmStateCriteria();
 
-    public static AlarmStateCalculator fromRegisteredAndActive(RegisteredAlarm registeredAlarm, ActiveAlarm activeAlarm) {
-        AlarmStateCalculator state = new AlarmStateCalculator();
 
-        log.warn("fromRegisteredAndActive: {}, {}", registeredAlarm != null, activeAlarm != null);
+    public static AlarmStateCriteria fromRegistered(RegisteredAlarm value) {
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setRegistered(value != null);
 
-        state.registeredAlarm = registeredAlarm;
-        state.activeAlarm = activeAlarm;
-
-        return state;
+        return criteria;
     }
 
-    public void setAlarmName(String alarmName) {
-        this.alarmName = alarmName;
+    public static AlarmStateCriteria fromActive(ActiveAlarm value) {
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setActive(value != null);
+
+        return criteria;
     }
 
-    public AlarmStateCalculator setLatched(LatchedAlarm latchedAlarm) {
-        log.warn("Setting Latched: {}", latchedAlarm != null);
-        this.latchedAlarm = latchedAlarm;
+    public static AlarmStateCriteria fromDisabled(DisabledAlarm value) {
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setDisabled(value != null);
 
-        return this;
+        return criteria;
     }
 
-    public AlarmStateCalculator setDisabled(DisabledAlarm disabledAlarm) {
-        log.warn("Setting Disabled: {}", disabledAlarm != null);
-        this.disabledAlarm = disabledAlarm;
+    public static AlarmStateCriteria fromLatched(LatchedAlarm value) {
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setLatched(value != null);
 
-        return this;
+        return criteria;
     }
 
-    public AlarmStateCalculator setShelved(ShelvedAlarm shelvedAlarm) {
-        log.warn("Setting Shelved: {}", shelvedAlarm != null);
-        this.shelvedAlarm = shelvedAlarm;
+    public static AlarmStateCriteria fromShelved(ShelvedAlarm value) {
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setShelved(value != null);
 
-        return this;
+        return criteria;
     }
 
     public String computeState() {
 
-        log.info("Computing State for: {}", alarmName);
-        log.info("Registered: {}", registeredAlarm != null);
-        log.info("Active:     {}", activeAlarm != null);
-        log.info("Latched:    {}", latchedAlarm != null);
-        log.info("Shelved:    {}", shelvedAlarm != null);
-        log.info("Disabled:   {}", disabledAlarm != null);
+        log.info("Computing State for: {}", criteria.getName());
+        log.info("Registered: {}", criteria.getRegistered());
+        log.info("Active:     {}", criteria.getActive());
+        log.info("Latched:    {}", criteria.getLatched());
+        log.info("Shelved:    {}", criteria.getShelved());
+        log.info("Disabled:   {}", criteria.getDisabled());
 
         AlarmState state = AlarmState.Normal;
 
-        if(activeAlarm != null) {
+        if(criteria.getActive()) {
             state = AlarmState.Active;
         }
 
-        if(latchedAlarm != null) {
-            if(activeAlarm != null) {
+        if(criteria.getLatched()) {
+            if(criteria.getActive()) {
                 state = AlarmState.Latched;
             } else {
                 state = AlarmState.InactiveLatched;
             }
         }
 
-        if(shelvedAlarm != null) {
-            if(shelvedAlarm.getOneshot()) {
+        if(criteria.getShelved()) {
+            if(criteria.getOneshot()) {
                 state = AlarmState.OneShotShelved;
             } else {
-                if(activeAlarm != null) {
+                if(criteria.getActive()) {
                     state = AlarmState.ContinuousShelved;
                 } else {
                     state = AlarmState.InactiveContinuousShelved;
@@ -85,8 +80,8 @@ public class AlarmStateCalculator {
             }
         }
 
-        if(disabledAlarm != null) {
-            if(activeAlarm != null) {
+        if(criteria.getDisabled()) {
+            if(criteria.getActive()) {
                 state = AlarmState.Disabled;
             } else {
                 state = AlarmState.InactiveDisabled;
@@ -94,5 +89,52 @@ public class AlarmStateCalculator {
         }
 
         return state.name();
+    }
+
+    public void append(AlarmStateCriteria criteria) {
+        if(criteria.getName() != null) {
+            this.criteria.setName(criteria.getName());
+        }
+        if(criteria.getRegistered()) {
+            this.criteria.setRegistered(true);
+        }
+        if(criteria.getActive()) {
+            this.criteria.setActive(true);
+        }
+        if(criteria.getDisabled()) {
+            this.criteria.setDisabled(true);
+        }
+        if(criteria.getLatched()) {
+            this.criteria.setLatched(true);
+        }
+        if(criteria.getShelved()) {
+            this.criteria.setShelved(true);
+        }
+
+    }
+
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("[");
+        builder.append(criteria.getName());
+        builder.append(",");
+        builder.append(criteria.getRegistered());
+        builder.append(",");
+        builder.append(criteria.getActive());
+        builder.append(",");
+        builder.append(criteria.getLatched());
+        builder.append(",");
+        builder.append(criteria.getShelved());
+        builder.append(",");
+        builder.append(criteria.getDisabled());
+        builder.append(",");
+        builder.append(computeState());
+        builder.append("]");
+
+        return builder.toString();
+    }
+
+    public AlarmStateCriteria getCriteria() {
+        return criteria;
     }
 }

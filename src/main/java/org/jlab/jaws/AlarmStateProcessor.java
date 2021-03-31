@@ -32,6 +32,7 @@ public class AlarmStateProcessor {
     public static final SpecificAvroSerde<ActiveAlarm> INPUT_VALUE_ACTIVE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<OverriddenAlarmValue> INPUT_VALUE_OVERRIDDEN_SERDE = new SpecificAvroSerde<>();
 
+    public static final SpecificAvroSerde<AlarmStateCriteria> CRITERIA_VALUE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<LatchedAlarm> LATCHED_VALUE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<DisabledAlarm> DISABLED_VALUE_SERDE = new SpecificAvroSerde<>();
     public static final SpecificAvroSerde<ShelvedAlarm> SHELVED_VALUE_SERDE = new SpecificAvroSerde<>();
@@ -83,6 +84,7 @@ public class AlarmStateProcessor {
         Map<String, String> config = new HashMap<>();
         config.put(SCHEMA_REGISTRY_URL_CONFIG, props.getProperty(SCHEMA_REGISTRY_URL_CONFIG));
 
+        CRITERIA_VALUE_SERDE.configure(config, false);
         LATCHED_VALUE_SERDE.configure(config, false);
         DISABLED_VALUE_SERDE.configure(config, false);
         SHELVED_VALUE_SERDE.configure(config, false);
@@ -111,67 +113,71 @@ public class AlarmStateProcessor {
                 (key, value) -> key.getType() == OverriddenAlarmType.Latched
         );
 
-        KStream<String, DisabledAlarm> disabledStream = overrideArray[0]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, DisabledAlarm>>)
+        KStream<String, AlarmStateCriteria> disabledStream = overrideArray[0]
+                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
                         (key, value) -> new KeyValue<>(key.getName(), toDisabledAlarm(value)),
                 Named.as("Disabled-Map"));
 
-        KStream<String, ShelvedAlarm> shelvedStream = overrideArray[1]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, ShelvedAlarm>>)
+        KStream<String, AlarmStateCriteria> shelvedStream = overrideArray[1]
+                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
                         (key, value) -> new KeyValue<>(key.getName(), toShelvedAlarm(value)),
                 Named.as("Shelved-Map"));
 
-        KStream<String, LatchedAlarm> latchedStream = overrideArray[2]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, LatchedAlarm>>)
+        KStream<String, AlarmStateCriteria> latchedStream = overrideArray[2]
+                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
                                 (key, value) -> new KeyValue<>(key.getName(), toLatchedAlarm(value)),
                         Named.as("Latched-Map"));
 
-        KTable<String, DisabledAlarm> disabledTable = disabledStream.toTable(Materialized.as("Disabled-Table")
-                .with(Serdes.String(), DISABLED_VALUE_SERDE));
+        KTable<String, AlarmStateCriteria> disabledTable = disabledStream.toTable(Materialized.as("Disabled-Table")
+                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
 
-        KTable<String, ShelvedAlarm> shelvedTable = shelvedStream.toTable(Materialized.as("Shelved-Table")
-                .with(Serdes.String(), SHELVED_VALUE_SERDE));
+        KTable<String, AlarmStateCriteria> shelvedTable = shelvedStream.toTable(Materialized.as("Shelved-Table")
+                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
 
-        KTable<String, LatchedAlarm> latchedTable = latchedStream.toTable(Materialized.as("Latched-Table")
-                .with(Serdes.String(), LATCHED_VALUE_SERDE));
+        KTable<String, AlarmStateCriteria> latchedTable = latchedStream.toTable(Materialized.as("Latched-Table")
+                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
+
+        KTable<String, AlarmStateCriteria> registeredCritiera = registeredTable
+                .mapValues(value -> AlarmStateCalculator.fromRegistered(value));
+
+        KTable<String, AlarmStateCriteria> activeCritiera = activeTable
+                .mapValues(value -> AlarmStateCalculator.fromActive(value));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
-        KTable<String, AlarmStateCalculator> registeredAndActive = registeredTable
-                .outerJoin(activeTable,
-                        (registeredAlarm, activeAlarm) ->
-                                AlarmStateCalculator.fromRegisteredAndActive(registeredAlarm, activeAlarm),
+        KTable<String, AlarmStateCriteria> registeredAndActive = registeredCritiera
+                .outerJoin(activeCritiera,
+                        new StateCriteriaJoiner(),
                         Named.as("Registered-and-Active-Table"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> plusDisabled = registeredAndActive
-                .leftJoin(disabledTable, (alarmState, disabledAlarm) ->
-                        alarmState.setDisabled(disabledAlarm),
+        KTable<String, AlarmStateCriteria> plusDisabled = registeredAndActive
+                .outerJoin(disabledTable, new StateCriteriaJoiner(),
                         Named.as("Plus-Disabled"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> plusShelving = plusDisabled
-                .leftJoin(shelvedTable, (alarmState, shelvedAlarm) ->
-                        alarmState.setShelved(shelvedAlarm),
+        KTable<String, AlarmStateCriteria> plusShelving = plusDisabled
+                .outerJoin(shelvedTable, new StateCriteriaJoiner(),
                         Named.as("Plus-Shelved"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCalculator> plusLatched = plusShelving
-                .leftJoin(latchedTable, (alarmState, latchedAlarm) ->
-                                alarmState.setLatched(latchedAlarm),
+        KTable<String, AlarmStateCriteria> plusLatched = plusShelving
+                .outerJoin(latchedTable, new StateCriteriaJoiner(),
                         Named.as("Plus-Latched"));
 
         // Assign names for AlarmStateCalculator to access (debugging)
-        KTable<String, AlarmStateCalculator> named = plusLatched
+        KTable<String, AlarmStateCriteria> named = plusLatched
                 .transformValues(new MsgTransformerFactory(), Named.as("Key-Added-to-Value"));
 
         // Now Compute the state
-        final KTable<String, String> out = named.mapValues(new ValueMapper<AlarmStateCalculator, String>() {
+        final KTable<String, String> out = named.mapValues(new ValueMapper<AlarmStateCriteria, String>() {
             @Override
-            public String apply(AlarmStateCalculator value) {
+            public String apply(AlarmStateCriteria value) {
                 String state = "null"; // This should never happen, right?
 
                 if(value != null) {
-                    state = value.computeState();
+                    AlarmStateCalculator calculator = new AlarmStateCalculator();
+                    calculator.append(value);
+                    state = calculator.computeState();
                 }
 
                 return state;
@@ -184,34 +190,55 @@ public class AlarmStateProcessor {
         return builder.build();
     }
 
-    private static LatchedAlarm toLatchedAlarm(OverriddenAlarmValue value) {
+    static class StateCriteriaJoiner implements ValueJoiner<AlarmStateCriteria, AlarmStateCriteria, AlarmStateCriteria> {
+        @Override
+        public AlarmStateCriteria apply(AlarmStateCriteria value1, AlarmStateCriteria value2) {
+            AlarmStateCalculator calculator = new AlarmStateCalculator();
+
+            if(value1 != null) {
+                calculator.append(value1);
+            }
+
+            if(value2 != null) {
+                calculator.append(value2);
+            }
+
+            AlarmStateCriteria result = calculator.getCriteria();
+
+            log.info("StateCriteriaJoin: {} = {} + {}", result, value1, value2);
+
+            return result;
+        }
+    }
+
+    private static AlarmStateCriteria toLatchedAlarm(OverriddenAlarmValue value) {
         LatchedAlarm alarm = null;
 
         if(value != null && value.getMsg() instanceof LatchedAlarm) {
             alarm = (LatchedAlarm) value.getMsg();
         }
 
-        return alarm;
+        return AlarmStateCalculator.fromLatched(alarm);
     }
 
-    private static DisabledAlarm toDisabledAlarm(OverriddenAlarmValue value) {
+    private static AlarmStateCriteria toDisabledAlarm(OverriddenAlarmValue value) {
         DisabledAlarm alarm = null;
 
         if(value != null && value.getMsg() instanceof DisabledAlarm) {
             alarm = (DisabledAlarm)value.getMsg();
         }
 
-        return alarm;
+        return AlarmStateCalculator.fromDisabled(alarm);
     }
 
-    private static ShelvedAlarm toShelvedAlarm(OverriddenAlarmValue value) {
+    private static AlarmStateCriteria toShelvedAlarm(OverriddenAlarmValue value) {
         ShelvedAlarm alarm = null;
 
         if(value != null && value.getMsg() instanceof ShelvedAlarm) {
             alarm = (ShelvedAlarm)value.getMsg();
         }
 
-        return alarm;
+        return AlarmStateCalculator.fromShelved(alarm);
     }
 
     /**
@@ -259,11 +286,11 @@ public class AlarmStateProcessor {
         latch.countDown();
     }
 
-    private static final class MsgTransformerFactory implements ValueTransformerWithKeySupplier<String, AlarmStateCalculator, AlarmStateCalculator> {
+    private static final class MsgTransformerFactory implements ValueTransformerWithKeySupplier<String, AlarmStateCriteria, AlarmStateCriteria> {
 
 
         @Override
-        public ValueTransformerWithKey<String, AlarmStateCalculator, AlarmStateCalculator> get() {
+        public ValueTransformerWithKey<String, AlarmStateCriteria, AlarmStateCriteria> get() {
             return new ValueTransformerWithKey<>() {
                 @Override
                 public void init(ProcessorContext context) {
@@ -271,8 +298,8 @@ public class AlarmStateProcessor {
                 }
 
                 @Override
-                public AlarmStateCalculator transform(String readOnlyKey, AlarmStateCalculator value) {
-                    value.setAlarmName(readOnlyKey);
+                public AlarmStateCriteria transform(String readOnlyKey, AlarmStateCriteria value) {
+                    value.setName(readOnlyKey);
 
                     return value;
                 }
