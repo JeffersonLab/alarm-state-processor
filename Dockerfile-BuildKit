@@ -5,7 +5,14 @@ ARG GITHUB_USERNAME
 ARG GITHUB_TOKEN
 ARG CUSTOM_CRT_URL
 
-RUN git clone https://github.com/JeffersonLab/alarm-state-processor \
+RUN --mount=type=secret,id=github.token \
+    if [ -f "/run/secrets/github.token" ] ; then \
+    echo "Using BuildKit Secret: $(cat /run/secrets/github.token)}" \
+    && export GITHUB_TOKEN=$(cat /run/secrets/github.token) ; \
+    else \
+    echo "Relying on Docker --build-arg for token" \
+    ; fi \
+    && git clone https://github.com/JeffersonLab/alarm-state-processor \
     && cd ./alarm-state-processor \
     && if [ -z "$CUSTOM_CRT_URL" ] ; then echo "No custom cert needed"; else \
         wget -O /usr/local/share/ca-certificates/customcert.crt $CUSTOM_CRT_URL \
@@ -15,13 +22,8 @@ RUN git clone https://github.com/JeffersonLab/alarm-state-processor \
         ; fi \
     && gradle build $OPTIONAL_CERT_ARG \
     && cp -r ./build/install/* /opt \
-    && cp ./docker-entrypoint.sh /
-
-# Attempt the ol' multi-stage build to hide your build ARGS trick until DockerHub supports secrets
-FROM gradle:6.6.1-jdk11 as final
-
-COPY --from=builder /home/gradle/alarm-state-processor/build/install* /opt
-COPY --from=builder /home/gradle/alarm-state-processor/docker-entrypoint.sh /
+    && cp ./docker-entrypoint.sh / \
+    && rm -rf /home/gradle/alarm-state-processor
 
 WORKDIR /opt/alarm-state-processor
 

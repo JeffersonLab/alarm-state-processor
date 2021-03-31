@@ -50,7 +50,7 @@ services:
   state:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-BuildKit
       args:
         - CUSTOM_CRT_URL=http://pki.jlab.org/JLabCA.crt
         - GITHUB_USERNAME=${GITHUB_USERNAME}
