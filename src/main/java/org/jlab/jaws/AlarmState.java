@@ -8,6 +8,9 @@ package org.jlab.jaws;
  *
  * Some states are mutually exclusive such as variants indicating Inactive or Oneshot vs Continuous Shelved.
  *
+ * The set of overrides is a subset of the set of possible alarm states as the states combine active and override and
+ * explicitly key on one shot vs continuous shelving.
+ *
  */
 public enum AlarmState {
     Normal,
