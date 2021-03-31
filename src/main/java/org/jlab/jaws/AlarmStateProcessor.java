@@ -57,7 +57,6 @@ public class AlarmStateProcessor {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "alarm-state-processor");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0); // Disable caching
         props.put(SCHEMA_REGISTRY_URL_CONFIG, registry);
 
         // https://stackoverflow.com/questions/57164133/kafka-stream-topology-optimization
