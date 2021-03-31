@@ -115,17 +115,17 @@ public class AlarmStateProcessor {
 
         KStream<String, AlarmStateCriteria> disabledStream = overrideArray[0]
                 .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                        (key, value) -> new KeyValue<>(key.getName(), toDisabledAlarm(value)),
+                        (key, value) -> new KeyValue<>(key.getName(), toDisabledCriteria(value)),
                 Named.as("Disabled-Map"));
 
         KStream<String, AlarmStateCriteria> shelvedStream = overrideArray[1]
                 .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                        (key, value) -> new KeyValue<>(key.getName(), toShelvedAlarm(value)),
+                        (key, value) -> new KeyValue<>(key.getName(), toShelvedCriteria(value)),
                 Named.as("Shelved-Map"));
 
         KStream<String, AlarmStateCriteria> latchedStream = overrideArray[2]
                 .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toLatchedAlarm(value)),
+                                (key, value) -> new KeyValue<>(key.getName(), toLatchedCriteria(value)),
                         Named.as("Latched-Map"));
 
         disabledStream.foreach(new ForeachAction<String, AlarmStateCriteria>() {
@@ -145,10 +145,10 @@ public class AlarmStateProcessor {
                 .with(Serdes.String(), CRITERIA_VALUE_SERDE));
 
         KTable<String, AlarmStateCriteria> registeredCritiera = registeredTable
-                .mapValues(value -> AlarmStateCalculator.fromRegistered(value));
+                .mapValues(value -> toRegisteredCriteria(value));
 
         KTable<String, AlarmStateCriteria> activeCritiera = activeTable
-                .mapValues(value -> AlarmStateCalculator.fromActive(value));
+                .mapValues(value -> toActiveCriteria(value));
 
         // I think we want outerJoin to ensure we get updates regardless if other "side" exists
         KTable<String, AlarmStateCriteria> registeredAndActive = registeredCritiera
@@ -218,34 +218,57 @@ public class AlarmStateProcessor {
         }
     }
 
-    private static AlarmStateCriteria toLatchedAlarm(OverriddenAlarmValue value) {
+    private static AlarmStateCriteria toRegisteredCriteria(RegisteredAlarm value) {
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setRegistered(value != null);
+
+        return criteria;
+    }
+
+    private static AlarmStateCriteria toActiveCriteria(ActiveAlarm value) {
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setActive(value != null);
+
+        return criteria;
+    }
+
+    private static AlarmStateCriteria toLatchedCriteria(OverriddenAlarmValue value) {
         LatchedAlarm alarm = null;
 
         if(value != null && value.getMsg() instanceof LatchedAlarm) {
             alarm = (LatchedAlarm) value.getMsg();
         }
 
-        return AlarmStateCalculator.fromLatched(alarm);
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setLatched(alarm != null);
+
+        return criteria;
     }
 
-    private static AlarmStateCriteria toDisabledAlarm(OverriddenAlarmValue value) {
-        DisabledAlarm alarm = null;
-
-        if(value != null && value.getMsg() instanceof DisabledAlarm) {
-            alarm = (DisabledAlarm)value.getMsg();
-        }
-
-        return AlarmStateCalculator.fromDisabled(alarm);
-    }
-
-    private static AlarmStateCriteria toShelvedAlarm(OverriddenAlarmValue value) {
+    private static AlarmStateCriteria toShelvedCriteria(OverriddenAlarmValue value) {
         ShelvedAlarm alarm = null;
 
         if(value != null && value.getMsg() instanceof ShelvedAlarm) {
             alarm = (ShelvedAlarm)value.getMsg();
         }
 
-        return AlarmStateCalculator.fromShelved(alarm);
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setShelved(alarm != null);
+
+        return criteria;
+    }
+
+    private static AlarmStateCriteria toDisabledCriteria(OverriddenAlarmValue value) {
+        DisabledAlarm alarm = null;
+
+        if(value != null && value.getMsg() instanceof DisabledAlarm) {
+            alarm = (DisabledAlarm)value.getMsg();
+        }
+
+        AlarmStateCriteria criteria = new AlarmStateCriteria();
+        criteria.setDisabled(alarm != null);
+
+        return criteria;
     }
 
     /**

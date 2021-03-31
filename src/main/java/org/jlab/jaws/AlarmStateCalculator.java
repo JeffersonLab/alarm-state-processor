@@ -9,42 +9,6 @@ public class AlarmStateCalculator {
 
     private AlarmStateCriteria criteria = new AlarmStateCriteria();
 
-
-    public static AlarmStateCriteria fromRegistered(RegisteredAlarm value) {
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setRegistered(value != null);
-
-        return criteria;
-    }
-
-    public static AlarmStateCriteria fromActive(ActiveAlarm value) {
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setActive(value != null);
-
-        return criteria;
-    }
-
-    public static AlarmStateCriteria fromDisabled(DisabledAlarm value) {
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setDisabled(value != null);
-
-        return criteria;
-    }
-
-    public static AlarmStateCriteria fromLatched(LatchedAlarm value) {
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setLatched(value != null);
-
-        return criteria;
-    }
-
-    public static AlarmStateCriteria fromShelved(ShelvedAlarm value) {
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setShelved(value != null);
-
-        return criteria;
-    }
-
     public String computeState() {
 
         log.info("Computing State for: {}", criteria.getName());
@@ -54,6 +18,7 @@ public class AlarmStateCalculator {
         log.info("Shelved:    {}", criteria.getShelved());
         log.info("Disabled:   {}", criteria.getDisabled());
 
+        // TODO: Should we have an Unregistered state?
         AlarmState state = AlarmState.Normal;
 
         if(criteria.getActive()) {
@@ -92,7 +57,7 @@ public class AlarmStateCalculator {
     }
 
     public void append(AlarmStateCriteria criteria) {
-        if(criteria.getName() != null && !criteria.getName().equals("Unspecified")) {
+        if(criteria.getName() != null) {
             this.criteria.setName(criteria.getName());
         }
         if(criteria.getRegistered()) {
@@ -101,14 +66,14 @@ public class AlarmStateCalculator {
         if(criteria.getActive()) {
             this.criteria.setActive(true);
         }
-        if(criteria.getDisabled()) {
-            this.criteria.setDisabled(true);
-        }
         if(criteria.getLatched()) {
             this.criteria.setLatched(true);
         }
         if(criteria.getShelved()) {
             this.criteria.setShelved(true);
+        }
+        if(criteria.getDisabled()) {
+            this.criteria.setDisabled(true);
         }
 
     }

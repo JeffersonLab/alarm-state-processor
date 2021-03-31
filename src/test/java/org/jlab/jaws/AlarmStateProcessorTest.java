@@ -89,23 +89,68 @@ public class AlarmStateProcessorTest {
     }
 
     @Test
+    public void testLatched() {
+        registeredInputTopic.pipeInput("alarm1", registeredAlarm1);
+        activeInputTopic.pipeInput("alarm1", activeAlarm1);
+
+        OverriddenAlarmValue overriddenAlarmValue1 = new OverriddenAlarmValue();
+        LatchedAlarm latchedAlarm = new LatchedAlarm();
+        overriddenAlarmValue1.setMsg(latchedAlarm);
+        overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Latched), overriddenAlarmValue1);
+
+        List<KeyValue<String, String>> outList = outputTopic.readKeyValuesToList();
+        Assert.assertEquals(3, outList.size());
+        KeyValue<String, String> result = outList.get(2);
+        Assert.assertEquals("alarm1", result.key);
+        Assert.assertEquals("Latched", result.value);
+    }
+
+    @Test
     public void testDisabled() {
         registeredInputTopic.pipeInput("alarm1", registeredAlarm1);
         activeInputTopic.pipeInput("alarm1", activeAlarm1);
 
         OverriddenAlarmValue overriddenAlarmValue1 = new OverriddenAlarmValue();
+        LatchedAlarm latchedAlarm = new LatchedAlarm();
+        overriddenAlarmValue1.setMsg(latchedAlarm);
+        overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Latched), overriddenAlarmValue1);
+
+        OverriddenAlarmValue overriddenAlarmValue2 = new OverriddenAlarmValue();
         DisabledAlarm disabledAlarm = new DisabledAlarm();
         disabledAlarm.setComments("Testing");
-        overriddenAlarmValue1.setMsg(disabledAlarm);
-
-        overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Disabled), overriddenAlarmValue1);
+        overriddenAlarmValue2.setMsg(disabledAlarm);
+        overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Disabled), overriddenAlarmValue2);
 
         List<KeyValue<String, String>> outList = outputTopic.readKeyValuesToList();
-
-        Assert.assertEquals(3, outList.size());
-
-        KeyValue<String, String> result = outList.get(2);
+        Assert.assertEquals(4, outList.size());
+        KeyValue<String, String> result = outList.get(3);
         Assert.assertEquals("alarm1", result.key);
         Assert.assertEquals("Disabled", result.value);
+    }
+
+    @Test
+    public void testUnDisabled() {
+        registeredInputTopic.pipeInput("alarm1", registeredAlarm1);
+        activeInputTopic.pipeInput("alarm1", activeAlarm1);
+
+        OverriddenAlarmValue overriddenAlarmValue1 = new OverriddenAlarmValue();
+        LatchedAlarm latchedAlarm = new LatchedAlarm();
+        overriddenAlarmValue1.setMsg(latchedAlarm);
+        overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Latched), overriddenAlarmValue1);
+
+        OverriddenAlarmValue overriddenAlarmValue2 = new OverriddenAlarmValue();
+        DisabledAlarm disabledAlarm = new DisabledAlarm();
+        disabledAlarm.setComments("Testing");
+        overriddenAlarmValue2.setMsg(disabledAlarm);
+        overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Disabled), overriddenAlarmValue2);
+
+
+        overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Disabled), null);
+
+        List<KeyValue<String, String>> outList = outputTopic.readKeyValuesToList();
+        Assert.assertEquals(5, outList.size());
+        KeyValue<String, String> result = outList.get(4);
+        Assert.assertEquals("alarm1", result.key);
+        Assert.assertEquals("Latched", result.value);
     }
 }
