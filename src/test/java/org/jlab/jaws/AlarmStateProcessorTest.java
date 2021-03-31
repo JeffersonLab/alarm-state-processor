@@ -2,14 +2,8 @@ package org.jlab.jaws;
 
 import org.apache.kafka.streams.*;
 import org.jlab.jaws.entity.*;
-import org.jlab.jaws.eventsource.EventSourceRecord;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 
@@ -31,9 +25,6 @@ public class AlarmStateProcessorTest {
 
     @Before
     public void setup() {
-
-        final String outTopicName = "alarm-state-processor-test";
-
         final Properties streamsConfig = AlarmStateProcessor.getStreamsConfig();
         streamsConfig.put(SCHEMA_REGISTRY_URL_CONFIG, "mock://testing");
         top = AlarmStateProcessor.createTopology(streamsConfig);
@@ -66,6 +57,7 @@ public class AlarmStateProcessorTest {
         testDriver.close();
     }
 
+    @Ignore
     @Test
     public void dumpTopology() {
         System.out.println(top.describe().toString());
