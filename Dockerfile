@@ -5,7 +5,14 @@ ARG GITHUB_USERNAME
 ARG GITHUB_TOKEN
 ARG CUSTOM_CRT_URL
 
-RUN git clone https://github.com/JeffersonLab/alarm-state-processor \
+RUN --mount=type=secret,id=github.token \
+    if [ -f "/run/secrets/github.token" ] ; then \
+    echo "Using BuildKit Secret: $(cat /run/secrets/github.token)}" \
+    && export GITHUB_TOKEN=$(cat /run/secrets/github.token) ; \
+    else \
+    echo "Relying on Docker --build-arg for token" \
+    ; fi \
+    && git clone https://github.com/JeffersonLab/alarm-state-processor \
     && cd ./alarm-state-processor \
     && if [ -z "$CUSTOM_CRT_URL" ] ; then echo "No custom cert needed"; else \
         wget -O /usr/local/share/ca-certificates/customcert.crt $CUSTOM_CRT_URL \
