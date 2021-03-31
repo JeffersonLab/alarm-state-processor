@@ -40,15 +40,31 @@ public class AlarmStateCalculator {
             }
         }
 
-        if(criteria.getShelved()) {
-            if(criteria.getOneshot()) {
-                state = AlarmState.OneShotShelved;
+        if(criteria.getContinuousShelved()) {
+            if(criteria.getActive()) {
+                state = AlarmState.ContinuousShelved;
             } else {
-                if(criteria.getActive()) {
-                    state = AlarmState.ContinuousShelved;
-                } else {
-                    state = AlarmState.InactiveContinuousShelved;
-                }
+                state = AlarmState.InactiveContinuousShelved;
+            }
+        }
+
+        if(criteria.getOneshotShelved()) {
+            if(criteria.getActive()) { // Once no longer active the "one shot" is used up, right?
+                state = AlarmState.OneShotShelved;
+            }
+        }
+
+        if(criteria.getMasked()) {
+            if(criteria.getActive()) { // Once no longer active then no longer masked, right?
+                state = AlarmState.Masked;
+            }
+        }
+
+        if(criteria.getFiltered()) {
+            if(criteria.getActive()) {
+                state = AlarmState.Filtered;
+            } else {
+                state = AlarmState.InactiveFiltered;
             }
         }
 
@@ -61,14 +77,17 @@ public class AlarmStateCalculator {
         }
 
         log.info("Computing State for: {}", criteria.getName());
-        log.info("Registered:      {}", criteria.getRegistered());
-        log.info("Active:          {}", criteria.getActive());
-        log.info("OffDelayed:      {}", criteria.getOffDelayed());
-        log.info("Latched:         {}", criteria.getLatched());
-        log.info("OnDelayed:       {}", criteria.getOnDelayed());
-        log.info("Shelved:         {}", criteria.getShelved());
-        log.info("Disabled:        {}", criteria.getDisabled());
-        log.info("Effective State: {}", state.name());
+        log.info("Registered:          {}", criteria.getRegistered());
+        log.info("Active:              {}", criteria.getActive());
+        log.info("OffDelayed:          {}", criteria.getOffDelayed());
+        log.info("Latched:             {}", criteria.getLatched());
+        log.info("ContinuousShelved:   {}", criteria.getContinuousShelved());
+        log.info("OneshotShelved:      {}", criteria.getOneshotShelved());
+        log.info("OnDelayed:           {}", criteria.getOnDelayed());
+        log.info("Masked:              {}", criteria.getMasked());
+        log.info("Filtered:            {}", criteria.getFiltered());
+        log.info("Disabled:            {}", criteria.getDisabled());
+        log.info("Effective State:     {}", state.name());
 
         return state.name();
     }
@@ -89,11 +108,20 @@ public class AlarmStateCalculator {
         if(criteria.getLatched()) {
             this.criteria.setLatched(true);
         }
+        if(criteria.getContinuousShelved()) {
+            this.criteria.setContinuousShelved(true);
+        }
+        if(criteria.getOneshotShelved()) {
+            this.criteria.setOneshotShelved(true);
+        }
         if(criteria.getOnDelayed()) {
             this.criteria.setOnDelayed(true);
         }
-        if(criteria.getShelved()) {
-            this.criteria.setShelved(true);
+        if(criteria.getMasked()) {
+            this.criteria.setMasked(true);
+        }
+        if(criteria.getFiltered()) {
+            this.criteria.setFiltered(true);
         }
         if(criteria.getDisabled()) {
             this.criteria.setDisabled(true);
@@ -114,9 +142,15 @@ public class AlarmStateCalculator {
         builder.append(",");
         builder.append(criteria.getLatched());
         builder.append(",");
-        builder.append(criteria.getOffDelayed());
+        builder.append(criteria.getContinuousShelved());
         builder.append(",");
-        builder.append(criteria.getShelved());
+        builder.append(criteria.getOneshotShelved());
+        builder.append(",");
+        builder.append(criteria.getOnDelayed());
+        builder.append(",");
+        builder.append(criteria.getMasked());
+        builder.append(",");
+        builder.append(criteria.getFiltered());
         builder.append(",");
         builder.append(criteria.getDisabled());
         builder.append(",");

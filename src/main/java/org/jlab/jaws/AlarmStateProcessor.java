@@ -253,7 +253,14 @@ public class AlarmStateProcessor {
         }
 
         AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setShelved(alarm != null);
+
+        if(alarm != null) {
+            if(alarm.getOneshot()) {
+                criteria.setContinuousShelved(true);
+            } else {
+                criteria.setOneshotShelved(true);
+            }
+        }
 
         return criteria;
     }

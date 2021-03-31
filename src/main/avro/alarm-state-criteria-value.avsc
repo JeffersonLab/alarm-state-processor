@@ -33,22 +33,34 @@
       "doc": "true if latched"
     },
     {
+      "name": "continuousShelved",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if continuous shelved"
+    },
+    {
+      "name": "oneshotShelved",
+      "type": "boolean",
+      "default": false,
+      "doc": "true if oneshot shelved"
+    },
+    {
       "name": "onDelayed",
       "type": "boolean",
       "default": false,
       "doc": "true if onDelayed"
     },
     {
-      "name": "shelved",
+      "name": "masked",
       "type": "boolean",
       "default": false,
-      "doc": "true if shelved"
+      "doc": "true if masked"
     },
     {
-      "name": "oneshot",
+      "name": "filtered",
       "type": "boolean",
       "default": false,
-      "doc": "true if one shot shelved"
+      "doc": "true if filtered"
     },
     {
       "name": "disabled",
