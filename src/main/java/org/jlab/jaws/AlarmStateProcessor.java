@@ -74,64 +74,58 @@ public class AlarmStateProcessor {
         final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN,
                 Consumed.as("Overridden-Table").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
 
-        final KTable<String, AlarmStateCriteria> overrideCriteriaTable = overriddenTable.groupBy(new KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>() {
-            @Override
-            public KeyValue<String, AlarmStateCriteria> apply(OverriddenAlarmKey key, OverriddenAlarmValue value) {
-                AlarmStateCriteria criteria;
-
-                switch(key.getType()) {
-                    case Latched:
-                        criteria = toLatchedCriteria(value);
-                        break;
-                    case OffDelayed:
-                        criteria = toOffDelayedCriteria(value);
-                        break;
-                    case Shelved:
-                        criteria = toShelvedCriteria(value);
-                        break;
-                    case OnDelayed:
-                        criteria = toOnDelayedCriteria(value);
-                        break;
-                    case Masked:
-                        criteria = toMaskedCriteria(value);
-                        break;
-                    case Filtered:
-                        criteria = toFilteredCriteria(value);
-                        break;
-                    case Disabled:
-                        criteria = toDisabledCriteria(value);
-                        break;
-                    default:
-                        throw new RuntimeException("Unknown OverriddenAlarmType: " + key.getType());
-                }
-
-                return new KeyValue<>(key.getName(), criteria);
-            }
-        })
-                .aggregate(new Initializer<AlarmStateCriteria>() {
-                    @Override
-                    public AlarmStateCriteria apply() {
-                        return new AlarmStateCriteria();
-                    }
-                }, new Aggregator<String, AlarmStateCriteria, AlarmStateCriteria>() {
-                    @Override
-                    public AlarmStateCriteria apply(String key, AlarmStateCriteria newValue, AlarmStateCriteria aggregate) {
-                        AlarmStateCalculator calculator = new AlarmStateCalculator();
-                        calculator.append(aggregate);
-                        calculator.append(newValue);
-                        return calculator.getCriteria();
-                    }
-                }, new Aggregator<String, AlarmStateCriteria, AlarmStateCriteria>() {
-                    @Override
-                    public AlarmStateCriteria apply(String key, AlarmStateCriteria oldValue, AlarmStateCriteria aggregate) {
-                        AlarmStateCalculator calculator = new AlarmStateCalculator();
-                        calculator.append(aggregate);
-                        calculator.remove(oldValue);
-                        return calculator.getCriteria();
-                    }
-                }, Materialized.as("Override-Criteria-Table").with(Serdes.String(), CRITERIA_VALUE_SERDE));
+        final KTable<String, AlarmStateCriteria> overrideCriteriaTable = overriddenTable
+                .groupBy((key, value) -> groupOverrideCriteria(key, value), Grouped.as("Grouped-Overrides")
+                        .with(Serdes.String(), CRITERIA_VALUE_SERDE))
+                .aggregate(
+                        () -> new AlarmStateCriteria(),
+                        (key, newValue, aggregate) -> {
+                            AlarmStateCalculator calculator = new AlarmStateCalculator();
+                            calculator.append(aggregate);
+                            calculator.append(newValue);
+                            return calculator.getCriteria();
+                        },
+                        (key, oldValue, aggregate) -> {
+                            AlarmStateCalculator calculator = new AlarmStateCalculator();
+                            calculator.append(aggregate);
+                            calculator.remove(oldValue);
+                            return calculator.getCriteria();
+                        },
+                        Materialized.as("Override-Criteria-Table").with(Serdes.String(), CRITERIA_VALUE_SERDE));
 
         return overrideCriteriaTable;
+    }
+
+    private static KeyValue<String, AlarmStateCriteria> groupOverrideCriteria(OverriddenAlarmKey key, OverriddenAlarmValue value) {
+        AlarmStateCriteria criteria;
+
+        switch(key.getType()) {
+            case Latched:
+                criteria = toLatchedCriteria(value);
+                break;
+            case OffDelayed:
+                criteria = toOffDelayedCriteria(value);
+                break;
+            case Shelved:
+                criteria = toShelvedCriteria(value);
+                break;
+            case OnDelayed:
+                criteria = toOnDelayedCriteria(value);
+                break;
+            case Masked:
+                criteria = toMaskedCriteria(value);
+                break;
+            case Filtered:
+                criteria = toFilteredCriteria(value);
+                break;
+            case Disabled:
+                criteria = toDisabledCriteria(value);
+                break;
+            default:
+                throw new RuntimeException("Unknown OverriddenAlarmType: " + key.getType());
+        }
+
+        return new KeyValue<>(key.getName(), criteria);
     }
 
     private static KTable<String, AlarmStateCriteria> getOverriddenCriteriaViaBranchAndMapAndJoin(StreamsBuilder builder) {
@@ -282,8 +276,8 @@ public class AlarmStateProcessor {
 
 
         KTable<String, AlarmStateCriteria> overriddenCriteria =
-                getOverriddenCriteriaViaBranchAndMapAndJoin(builder);
-                //getOverriddenCriteriaViaGroupBy(builder);
+                //getOverriddenCriteriaViaBranchAndMapAndJoin(builder);
+                getOverriddenCriteriaViaGroupBy(builder);
 
 
         // Now we start joining all the streams together
