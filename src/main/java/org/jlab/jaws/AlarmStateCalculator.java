@@ -11,18 +11,19 @@ public class AlarmStateCalculator {
 
     public String computeState() {
 
-        log.info("Computing State for: {}", criteria.getName());
-        log.info("Registered: {}", criteria.getRegistered());
-        log.info("Active:     {}", criteria.getActive());
-        log.info("Latched:    {}", criteria.getLatched());
-        log.info("Shelved:    {}", criteria.getShelved());
-        log.info("Disabled:   {}", criteria.getDisabled());
+        // Note: criteria are evaluated in increasing precedence order (last item, disabled, has highest precedence)
 
-        // TODO: Should we have an Unregistered state?
+        // Should we have an Unregistered state or always default to Normal?
         AlarmState state = AlarmState.Normal;
 
         if(criteria.getActive()) {
             state = AlarmState.Active;
+        }
+
+        if(criteria.getOffDelayed()) {
+            if(!criteria.getActive()) {  // Is this necessary?   If active then no need to incite active with OffDelay
+                state = AlarmState.OffDelayed;
+            }
         }
 
         if(criteria.getLatched()) {
@@ -30,6 +31,12 @@ public class AlarmStateCalculator {
                 state = AlarmState.Latched;
             } else {
                 state = AlarmState.InactiveLatched;
+            }
+        }
+
+        if(criteria.getOnDelayed()) {
+            if(criteria.getActive()) {  // Is this necessary?   If not active then no need to suppress active with OnDelay
+                state = AlarmState.OnDelayed;
             }
         }
 
@@ -53,6 +60,16 @@ public class AlarmStateCalculator {
             }
         }
 
+        log.info("Computing State for: {}", criteria.getName());
+        log.info("Registered:      {}", criteria.getRegistered());
+        log.info("Active:          {}", criteria.getActive());
+        log.info("OffDelayed:      {}", criteria.getOffDelayed());
+        log.info("Latched:         {}", criteria.getLatched());
+        log.info("OnDelayed:       {}", criteria.getOnDelayed());
+        log.info("Shelved:         {}", criteria.getShelved());
+        log.info("Disabled:        {}", criteria.getDisabled());
+        log.info("Effective State: {}", state.name());
+
         return state.name();
     }
 
@@ -66,8 +83,14 @@ public class AlarmStateCalculator {
         if(criteria.getActive()) {
             this.criteria.setActive(true);
         }
+        if(criteria.getOffDelayed()) {
+            this.criteria.setOffDelayed(true);
+        }
         if(criteria.getLatched()) {
             this.criteria.setLatched(true);
+        }
+        if(criteria.getOnDelayed()) {
+            this.criteria.setOnDelayed(true);
         }
         if(criteria.getShelved()) {
             this.criteria.setShelved(true);
@@ -87,7 +110,11 @@ public class AlarmStateCalculator {
         builder.append(",");
         builder.append(criteria.getActive());
         builder.append(",");
+        builder.append(criteria.getOffDelayed());
+        builder.append(",");
         builder.append(criteria.getLatched());
+        builder.append(",");
+        builder.append(criteria.getOffDelayed());
         builder.append(",");
         builder.append(criteria.getShelved());
         builder.append(",");
