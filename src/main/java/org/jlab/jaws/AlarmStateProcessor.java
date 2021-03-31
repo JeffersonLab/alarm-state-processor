@@ -71,36 +71,71 @@ public class AlarmStateProcessor {
         return props;
     }
 
-    /**
-     * Create the Kafka Streams Domain Specific Language (DSL) Topology.
-     *
-     * @param props The streams configuration
-     * @return The Topology
-     */
-    static Topology createTopology(Properties props) {
-        final StreamsBuilder builder = new StreamsBuilder();
+    private static KTable<String, AlarmStateCriteria> getOverriddenCriteriaViaGroupBy(StreamsBuilder builder) {
+        final KTable<OverriddenAlarmKey, OverriddenAlarmValue> overriddenTable = builder.table(INPUT_TOPIC_OVERRIDDEN,
+                Consumed.as("Overridden-Table").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
 
-        // If you get an unhelpful NullPointerException in the depths of the AVRO deserializer it's likely because you didn't set registry config
-        Map<String, String> config = new HashMap<>();
-        config.put(SCHEMA_REGISTRY_URL_CONFIG, props.getProperty(SCHEMA_REGISTRY_URL_CONFIG));
+        final KTable<String, AlarmStateCriteria> overrideCriteriaTable = overriddenTable.groupBy(new KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>() {
+            @Override
+            public KeyValue<String, AlarmStateCriteria> apply(OverriddenAlarmKey key, OverriddenAlarmValue value) {
+                AlarmStateCriteria criteria;
 
-        CRITERIA_VALUE_SERDE.configure(config, false);
-        LATCHED_VALUE_SERDE.configure(config, false);
-        DISABLED_VALUE_SERDE.configure(config, false);
-        SHELVED_VALUE_SERDE.configure(config, false);
+                switch(key.getType()) {
+                    case Latched:
+                        criteria = toLatchedCriteria(value);
+                        break;
+                    case OffDelayed:
+                        criteria = toOffDelayedCriteria(value);
+                        break;
+                    case Shelved:
+                        criteria = toShelvedCriteria(value);
+                        break;
+                    case OnDelayed:
+                        criteria = toOnDelayedCriteria(value);
+                        break;
+                    case Masked:
+                        criteria = toMaskedCriteria(value);
+                        break;
+                    case Filtered:
+                        criteria = toFilteredCriteria(value);
+                        break;
+                    case Disabled:
+                        criteria = toDisabledCriteria(value);
+                        break;
+                    default:
+                        throw new RuntimeException("Unknown OverriddenAlarmType: " + key.getType());
+                }
 
-        INPUT_KEY_OVERRIDDEN_SERDE.configure(config, true);
-        INPUT_VALUE_OVERRIDDEN_SERDE.configure(config, false);
+                return new KeyValue<>(key.getName(), criteria);
+            }
+        })
+                .aggregate(new Initializer<AlarmStateCriteria>() {
+                    @Override
+                    public AlarmStateCriteria apply() {
+                        return new AlarmStateCriteria();
+                    }
+                }, new Aggregator<String, AlarmStateCriteria, AlarmStateCriteria>() {
+                    @Override
+                    public AlarmStateCriteria apply(String key, AlarmStateCriteria newValue, AlarmStateCriteria aggregate) {
+                        AlarmStateCalculator calculator = new AlarmStateCalculator();
+                        calculator.append(aggregate);
+                        calculator.append(newValue);
+                        return calculator.getCriteria();
+                    }
+                }, new Aggregator<String, AlarmStateCriteria, AlarmStateCriteria>() {
+                    @Override
+                    public AlarmStateCriteria apply(String key, AlarmStateCriteria oldValue, AlarmStateCriteria aggregate) {
+                        AlarmStateCalculator calculator = new AlarmStateCalculator();
+                        calculator.append(aggregate);
+                        calculator.remove(oldValue);
+                        return calculator.getCriteria();
+                    }
+                }, Materialized.as("Override-Criteria-Table").with(Serdes.String(), CRITERIA_VALUE_SERDE));
 
-        INPUT_VALUE_REGISTERED_SERDE.configure(config, false);
-        INPUT_VALUE_ACTIVE_SERDE.configure(config, false);
+        return overrideCriteriaTable;
+    }
 
-        final KTable<String, RegisteredAlarm> registeredTable = builder.table(INPUT_TOPIC_REGISTERED,
-                Consumed.as("Registered-Table").with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
-        final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE,
-                Consumed.as("Active-Table").with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
-
-
+    private static KTable<String, AlarmStateCriteria> getOverriddenCriteriaViaBranchAndMapAndJoin(StreamsBuilder builder) {
         final KStream<OverriddenAlarmKey, OverriddenAlarmValue> overriddenStream = builder.stream(INPUT_TOPIC_OVERRIDDEN,
                 Consumed.as("Overridden-Stream").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
 
@@ -129,8 +164,8 @@ public class AlarmStateProcessor {
 
         KStream<String, AlarmStateCriteria> shelvedStream = overrideArray[2]
                 .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                        (key, value) -> new KeyValue<>(key.getName(), toShelvedCriteria(value)),
-                Named.as("Shelved-Map"));
+                                (key, value) -> new KeyValue<>(key.getName(), toShelvedCriteria(value)),
+                        Named.as("Shelved-Map"));
 
         KStream<String, AlarmStateCriteria> onDelayedStream = overrideArray[3]
                 .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
@@ -175,36 +210,13 @@ public class AlarmStateProcessor {
         KTable<String, AlarmStateCriteria> disabledTable = disabledStream.toTable(Materialized.as("Disabled-Table")
                 .with(Serdes.String(), CRITERIA_VALUE_SERDE));
 
-
-        // Map registered and active kTables to AlarmStateCriteria tables
-        KTable<String, AlarmStateCriteria> registeredCritiera = registeredTable
-                .mapValues(value -> toRegisteredCriteria(value));
-
-        KTable<String, AlarmStateCriteria> activeCritiera = activeTable
-                .mapValues(value -> toActiveCriteria(value));
-
-
-
-        // Now we start joining all the streams together
-
-        // I think we want outerJoin to ensure we get updates regardless if other "side" exists
-        KTable<String, AlarmStateCriteria> registeredAndActive = registeredCritiera
-                .outerJoin(activeCritiera,
-                        new StateCriteriaJoiner(),
-                        Named.as("Registered-and-Active-Table"));
-
-        // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusLatched = registeredAndActive
-                .outerJoin(latchedTable, new StateCriteriaJoiner(),
-                        Named.as("Plus-Latched"));
-
-        // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusOffDelayed = plusLatched
+        // Start joining!
+        KTable<String, AlarmStateCriteria> latchedAndOffDelayed = latchedTable
                 .outerJoin(offDelayedTable, new StateCriteriaJoiner(),
-                        Named.as("Plus-OffDelayed"));
+                        Named.as("Latched-And-OffDelayed"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusShelving = plusOffDelayed
+        KTable<String, AlarmStateCriteria> plusShelving =latchedAndOffDelayed
                 .outerJoin(shelvedTable, new StateCriteriaJoiner(),
                         Named.as("Plus-Shelved"));
 
@@ -224,14 +236,75 @@ public class AlarmStateProcessor {
                         Named.as("Plus-Filtered"));
 
         // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusDisabled = plusFiltered
+        KTable<String, AlarmStateCriteria> overrideCriteriaTable = plusFiltered
                 .outerJoin(disabledTable, new StateCriteriaJoiner(),
                         Named.as("Plus-Disabled"));
+
+        return overrideCriteriaTable;
+    }
+
+    /**
+     * Create the Kafka Streams Domain Specific Language (DSL) Topology.
+     *
+     * @param props The streams configuration
+     * @return The Topology
+     */
+    static Topology createTopology(Properties props) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        // If you get an unhelpful NullPointerException in the depths of the AVRO deserializer it's likely because you didn't set registry config
+        Map<String, String> config = new HashMap<>();
+        config.put(SCHEMA_REGISTRY_URL_CONFIG, props.getProperty(SCHEMA_REGISTRY_URL_CONFIG));
+
+        CRITERIA_VALUE_SERDE.configure(config, false);
+        LATCHED_VALUE_SERDE.configure(config, false);
+        DISABLED_VALUE_SERDE.configure(config, false);
+        SHELVED_VALUE_SERDE.configure(config, false);
+
+        INPUT_KEY_OVERRIDDEN_SERDE.configure(config, true);
+        INPUT_VALUE_OVERRIDDEN_SERDE.configure(config, false);
+
+        INPUT_VALUE_REGISTERED_SERDE.configure(config, false);
+        INPUT_VALUE_ACTIVE_SERDE.configure(config, false);
+
+        final KTable<String, RegisteredAlarm> registeredTable = builder.table(INPUT_TOPIC_REGISTERED,
+                Consumed.as("Registered-Table").with(INPUT_KEY_REGISTERED_SERDE, INPUT_VALUE_REGISTERED_SERDE));
+        final KTable<String, ActiveAlarm> activeTable = builder.table(INPUT_TOPIC_ACTIVE,
+                Consumed.as("Active-Table").with(INPUT_KEY_ACTIVE_SERDE, INPUT_VALUE_ACTIVE_SERDE));
+
+
+
+        // Map registered and active kTables to AlarmStateCriteria tables
+        KTable<String, AlarmStateCriteria> registeredCritiera = registeredTable
+                .mapValues(value -> toRegisteredCriteria(value));
+
+        KTable<String, AlarmStateCriteria> activeCritiera = activeTable
+                .mapValues(value -> toActiveCriteria(value));
+
+
+        KTable<String, AlarmStateCriteria> overriddenCriteria =
+                getOverriddenCriteriaViaBranchAndMapAndJoin(builder);
+                //getOverriddenCriteriaViaGroupBy(builder);
+
+
+        // Now we start joining all the streams together
+
+        // I think we want outerJoin to ensure we get updates regardless if other "side" exists
+        KTable<String, AlarmStateCriteria> registeredAndActive = registeredCritiera
+                .outerJoin(activeCritiera,
+                        new StateCriteriaJoiner(),
+                        Named.as("Registered-and-Active-Table"));
+
+        // Daisy chain joins
+        KTable<String, AlarmStateCriteria> plusOverrides = registeredAndActive
+                .outerJoin(overriddenCriteria, new StateCriteriaJoiner(),
+                        Named.as("Plus-Latched"));
+
 
 
 
         // Assign alarm names in keys into value part of record (AlarmStateCriteria) - this is really only be debugging
-        KTable<String, AlarmStateCriteria> keyInValueStream = plusDisabled
+        KTable<String, AlarmStateCriteria> keyInValueStream = plusOverrides
                 .transformValues(new MsgTransformerFactory(), Named.as("Key-Added-to-Value"));
 
         // Now Compute the state

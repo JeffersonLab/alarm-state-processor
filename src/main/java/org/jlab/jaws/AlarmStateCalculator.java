@@ -126,7 +126,42 @@ public class AlarmStateCalculator {
         if(criteria.getDisabled()) {
             this.criteria.setDisabled(true);
         }
+    }
 
+    public void remove(AlarmStateCriteria criteria) {
+        if(criteria.getName() != null) {
+            this.criteria.setName(null);
+        }
+        if(criteria.getRegistered()) {
+            this.criteria.setRegistered(false);
+        }
+        if(criteria.getActive()) {
+            this.criteria.setActive(false);
+        }
+        if(criteria.getOffDelayed()) {
+            this.criteria.setOffDelayed(false);
+        }
+        if(criteria.getLatched()) {
+            this.criteria.setLatched(false);
+        }
+        if(criteria.getContinuousShelved()) {
+            this.criteria.setContinuousShelved(false);
+        }
+        if(criteria.getOneshotShelved()) {
+            this.criteria.setOneshotShelved(false);
+        }
+        if(criteria.getOnDelayed()) {
+            this.criteria.setOnDelayed(false);
+        }
+        if(criteria.getMasked()) {
+            this.criteria.setMasked(false);
+        }
+        if(criteria.getFiltered()) {
+            this.criteria.setFiltered(false);
+        }
+        if(criteria.getDisabled()) {
+            this.criteria.setDisabled(false);
+        }
     }
 
     public String toString() {
