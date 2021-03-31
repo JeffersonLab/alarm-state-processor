@@ -5,8 +5,7 @@
   "fields": [
     {
       "name": "name",
-      "type": "string",
-      "default": "Unspecified",
+      "type": ["null","string"],
       "doc": "name of the alarm (key inside value)"
     },
     {

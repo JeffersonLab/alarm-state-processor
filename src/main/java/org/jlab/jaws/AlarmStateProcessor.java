@@ -128,6 +128,13 @@ public class AlarmStateProcessor {
                                 (key, value) -> new KeyValue<>(key.getName(), toLatchedAlarm(value)),
                         Named.as("Latched-Map"));
 
+        disabledStream.foreach(new ForeachAction<String, AlarmStateCriteria>() {
+            @Override
+            public void apply(String key, AlarmStateCriteria value) {
+                log.info("Disabled Record: {} = {}", key, value);
+            }
+        });
+
         KTable<String, AlarmStateCriteria> disabledTable = disabledStream.toTable(Materialized.as("Disabled-Table")
                 .with(Serdes.String(), CRITERIA_VALUE_SERDE));
 

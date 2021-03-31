@@ -92,7 +92,7 @@ public class AlarmStateCalculator {
     }
 
     public void append(AlarmStateCriteria criteria) {
-        if(criteria.getName() != null) {
+        if(criteria.getName() != null && !criteria.getName().equals("Unspecified")) {
             this.criteria.setName(criteria.getName());
         }
         if(criteria.getRegistered()) {
