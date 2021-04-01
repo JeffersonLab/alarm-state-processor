@@ -27,7 +27,7 @@ repositories {
         name = "GitHubPackages"
         url = uri("https://maven.pkg.github.com/JeffersonLab/jaws-libj")
         credentials {
-            username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_USERNAME")
+            username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_USER")
             password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
         }
     }
