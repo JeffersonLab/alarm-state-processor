@@ -7,7 +7,7 @@ plugins {
 }
 
 group 'org.jlab.jaws'
-version '0.1.0'
+version '1.0.0'
 
 ext.confluentVer = '6.0.1'
 ext.kafkaVer = '2.6.0'
