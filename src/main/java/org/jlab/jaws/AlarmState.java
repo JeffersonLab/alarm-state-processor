@@ -16,15 +16,15 @@ public enum AlarmState {
     Normal,
     Active,
     Latched,
-    InactiveLatched,
+    NormalLatched,
     OffDelayed,
     ContinuousShelved,
-    InactiveContinuousShelved,
+    NormalContinuousShelved,
     OneShotShelved,
     OnDelayed,
     Masked,
     Filtered,
-    InactiveFiltered,
+    NormalFiltered,
     Disabled,
-    InactiveDisabled
+    NormalDisabled
 }

@@ -30,7 +30,7 @@ public class AlarmStateCalculator {
             if(criteria.getActive()) {
                 state = AlarmState.Latched;
             } else {
-                state = AlarmState.InactiveLatched;
+                state = AlarmState.NormalLatched;
             }
         }
 
@@ -44,7 +44,7 @@ public class AlarmStateCalculator {
             if(criteria.getActive()) {
                 state = AlarmState.ContinuousShelved;
             } else {
-                state = AlarmState.InactiveContinuousShelved;
+                state = AlarmState.NormalContinuousShelved;
             }
         }
 
@@ -64,7 +64,7 @@ public class AlarmStateCalculator {
             if(criteria.getActive()) {
                 state = AlarmState.Filtered;
             } else {
-                state = AlarmState.InactiveFiltered;
+                state = AlarmState.NormalFiltered;
             }
         }
 
@@ -72,7 +72,7 @@ public class AlarmStateCalculator {
             if(criteria.getActive()) {
                 state = AlarmState.Disabled;
             } else {
-                state = AlarmState.InactiveDisabled;
+                state = AlarmState.NormalDisabled;
             }
         }
 
