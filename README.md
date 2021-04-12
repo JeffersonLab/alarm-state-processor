@@ -60,7 +60,7 @@ The Kafka Streams app is a regular Java application, and start scripts are creat
 gradlew assembleDist
 ```
 
-[Releases](https://github.com/JeffersonLab/alarms-filter/releases)
+[Releases](https://github.com/JeffersonLab/alarm-state-processor/releases)
 
 Launch with:
 
