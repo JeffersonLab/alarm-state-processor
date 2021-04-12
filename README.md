@@ -43,7 +43,6 @@ gradlew build
 ```
 docker-compose -f docker-compose.yml -f docker-compose-dev.yml up
 ```
-**Note**: The Gradle build requires environment variables GITHUB_USER and GITHUB_TOKEN or Java properties _github.user_ and _github.token_ in order to access the dependencies stored on GitHub Packages.   You can set the Java properties in the file `<user-home>.gradle/gradle.properties`.
 
 ## Configure
 Runtime Environment Variables
@@ -78,5 +77,3 @@ bin/alarm-state-processor.bat
 docker pull slominskir/alarm-state-processor
 ```
 Image hosted on [DockerHub](https://hub.docker.com/r/slominskir/alarm-state-processor)
-
-**Note**: In order to run the Docker build (Dockerfile included in this project) the build arguments GITHUB_USER and GITHUB_TOKEN are required so that the dependencies stored on GitHub Packages can be downloaded.  For Docker Compose you can set them in a file named _.env_ in the project home directory and they'll be picked up by the Docker-Compose build.  For a regular Docker build you'll need to use `--build-arg GITHUB_USER=<value>` and `--build-arg GITHUB_TOKEN=<value>`.  If your Docker engine supports BuiltKit secrets you can instead set the token in a file such as `github.token.txt` and then pass that into the build with `--secret id=github.token,src=github.token.txt` with the alternative build file named Dockerfile-BuildKit.
