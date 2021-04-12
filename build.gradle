@@ -22,15 +22,6 @@ repositories {
     maven {
         url "https://packages.confluent.io/maven"
     }
-
-    maven {
-        name = "GitHubPackages"
-        url = uri("https://maven.pkg.github.com/JeffersonLab/jaws-libj")
-        credentials {
-            username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_USER")
-            password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
-        }
-    }
 }
 
 dependencies {
@@ -38,7 +29,7 @@ dependencies {
             "io.confluent:kafka-streams-avro-serde:" + confluentVer,
             "org.apache.avro:avro:1.10.1",
             "org.slf4j:slf4j-log4j12:1.7.30",
-            "org.jlab.jaws:jaws-libj:0.1.0"
+            "org.jlab:jaws-libj:1.0.0"
     testImplementation "org.apache.kafka:kafka-streams-test-utils:" + kafkaVer,
             "junit:junit:4.13.1"
 }
