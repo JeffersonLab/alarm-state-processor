@@ -60,6 +60,7 @@ public class AlarmStateProcessorTest {
     @Ignore
     @Test
     public void dumpTopology() {
+        // View output at: https://zz85.github.io/kafka-streams-viz/
         System.out.println(top.describe().toString());
     }
 
