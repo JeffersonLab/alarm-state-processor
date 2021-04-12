@@ -128,114 +128,6 @@ public class AlarmStateProcessor {
         return new KeyValue<>(key.getName(), criteria);
     }
 
-    private static KTable<String, AlarmStateCriteria> getOverriddenCriteriaViaBranchAndMapAndJoin(StreamsBuilder builder) {
-        final KStream<OverriddenAlarmKey, OverriddenAlarmValue> overriddenStream = builder.stream(INPUT_TOPIC_OVERRIDDEN,
-                Consumed.as("Overridden-Stream").with(INPUT_KEY_OVERRIDDEN_SERDE, INPUT_VALUE_OVERRIDDEN_SERDE));
-
-        @SuppressWarnings("unchecked")
-        KStream<OverriddenAlarmKey, OverriddenAlarmValue>[] overrideArray = overriddenStream.branch(
-                Named.as("Split-Overrides"),
-                (key, value) -> key.getType() == OverriddenAlarmType.Latched,
-                (key, value) -> key.getType() == OverriddenAlarmType.OffDelayed,
-                (key, value) -> key.getType() == OverriddenAlarmType.Shelved,
-                (key, value) -> key.getType() == OverriddenAlarmType.OnDelayed,
-                (key, value) -> key.getType() == OverriddenAlarmType.Masked,
-                (key, value) -> key.getType() == OverriddenAlarmType.Filtered,
-                (key, value) -> key.getType() == OverriddenAlarmType.Disabled
-        );
-
-        // Map overrides to AlarmStateCriteria
-        KStream<String, AlarmStateCriteria> latchedStream = overrideArray[0]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toLatchedCriteria(value)),
-                        Named.as("Latched-Map"));
-
-        KStream<String, AlarmStateCriteria> offDelayedStream = overrideArray[1]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toOffDelayedCriteria(value)),
-                        Named.as("Off-Delayed-Map"));
-
-        KStream<String, AlarmStateCriteria> shelvedStream = overrideArray[2]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toShelvedCriteria(value)),
-                        Named.as("Shelved-Map"));
-
-        KStream<String, AlarmStateCriteria> onDelayedStream = overrideArray[3]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toOnDelayedCriteria(value)),
-                        Named.as("On-Delayed-Map"));
-
-        KStream<String, AlarmStateCriteria> maskedStream = overrideArray[4]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toMaskedCriteria(value)),
-                        Named.as("Masked-Map"));
-
-        KStream<String, AlarmStateCriteria> filteredStream = overrideArray[5]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toFilteredCriteria(value)),
-                        Named.as("Filtered-Map"));
-
-        KStream<String, AlarmStateCriteria> disabledStream = overrideArray[6]
-                .map((KeyValueMapper<OverriddenAlarmKey, OverriddenAlarmValue, KeyValue<String, AlarmStateCriteria>>)
-                                (key, value) -> new KeyValue<>(key.getName(), toDisabledCriteria(value)),
-                        Named.as("Disabled-Map"));
-
-
-        // Materialize KTables from override criteria streams
-        KTable<String, AlarmStateCriteria> latchedTable = latchedStream.toTable(Materialized.as("Latched-Table")
-                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
-
-        KTable<String, AlarmStateCriteria> offDelayedTable = offDelayedStream.toTable(Materialized.as("OffDelayed-Table")
-                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
-
-        KTable<String, AlarmStateCriteria> shelvedTable = shelvedStream.toTable(Materialized.as("Shelved-Table")
-                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
-
-        KTable<String, AlarmStateCriteria> onDelayedTable = onDelayedStream.toTable(Materialized.as("OnDelayed-Table")
-                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
-
-        KTable<String, AlarmStateCriteria> maskedTable = maskedStream.toTable(Materialized.as("Masked-Table")
-                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
-
-        KTable<String, AlarmStateCriteria> filteredTable = filteredStream.toTable(Materialized.as("Filtered-Table")
-                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
-
-        KTable<String, AlarmStateCriteria> disabledTable = disabledStream.toTable(Materialized.as("Disabled-Table")
-                .with(Serdes.String(), CRITERIA_VALUE_SERDE));
-
-        // Start joining!
-        KTable<String, AlarmStateCriteria> latchedAndOffDelayed = latchedTable
-                .outerJoin(offDelayedTable, new StateCriteriaJoiner(),
-                        Named.as("Latched-And-OffDelayed"));
-
-        // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusShelving =latchedAndOffDelayed
-                .outerJoin(shelvedTable, new StateCriteriaJoiner(),
-                        Named.as("Plus-Shelved"));
-
-        // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusOnDelayed = plusShelving
-                .outerJoin(onDelayedTable, new StateCriteriaJoiner(),
-                        Named.as("Plus-OnDelayed"));
-
-        // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusMasked = plusOnDelayed
-                .outerJoin(maskedTable, new StateCriteriaJoiner(),
-                        Named.as("Plus-Masked"));
-
-        // Daisy chain joins
-        KTable<String, AlarmStateCriteria> plusFiltered = plusMasked
-                .outerJoin(filteredTable, new StateCriteriaJoiner(),
-                        Named.as("Plus-Filtered"));
-
-        // Daisy chain joins
-        KTable<String, AlarmStateCriteria> overrideCriteriaTable = plusFiltered
-                .outerJoin(disabledTable, new StateCriteriaJoiner(),
-                        Named.as("Plus-Disabled"));
-
-        return overrideCriteriaTable;
-    }
-
     /**
      * Create the Kafka Streams Domain Specific Language (DSL) Topology.
      *
@@ -275,9 +167,7 @@ public class AlarmStateProcessor {
                 .mapValues(value -> toActiveCriteria(value));
 
 
-        KTable<String, AlarmStateCriteria> overriddenCriteria =
-                //getOverriddenCriteriaViaBranchAndMapAndJoin(builder);
-                getOverriddenCriteriaViaGroupBy(builder);
+        KTable<String, AlarmStateCriteria> overriddenCriteria = getOverriddenCriteriaViaGroupBy(builder);
 
 
         // Now we start joining all the streams together
@@ -296,7 +186,7 @@ public class AlarmStateProcessor {
 
 
 
-        // Assign alarm names in keys into value part of record (AlarmStateCriteria) - this is really only be debugging
+        // Assign alarm names in keys into value part of record (AlarmStateCriteria) - this is really only for debugging
         KTable<String, AlarmStateCriteria> keyInValueStream = plusOverrides
                 .transformValues(new MsgTransformerFactory(), Named.as("Key-Added-to-Value"));
 
@@ -467,9 +357,6 @@ public class AlarmStateProcessor {
         final Properties props = getStreamsConfig();
         final Topology top = createTopology(props);
         streams = new KafkaStreams(top, props);
-
-        // View output at: https://zz85.github.io/kafka-streams-viz/
-        log.info(top.describe().toString());
 
         streams.start();
 
