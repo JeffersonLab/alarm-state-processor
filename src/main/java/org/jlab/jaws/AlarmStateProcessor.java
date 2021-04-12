@@ -101,29 +101,37 @@ public class AlarmStateProcessor {
 
         switch(key.getType()) {
             case Latched:
-                criteria = toLatchedCriteria(value);
+                criteria = new AlarmStateCriteria();
+                criteria.setLatched(value != null);
                 break;
             case OffDelayed:
-                criteria = toOffDelayedCriteria(value);
+                criteria = new AlarmStateCriteria();
+                criteria.setOffDelayed(value != null);
                 break;
             case Shelved:
-                criteria = toShelvedCriteria(value);
+                criteria = toShelvedCriteria(value); // We only need to look at the value for shelved
                 break;
             case OnDelayed:
-                criteria = toOnDelayedCriteria(value);
+                criteria = new AlarmStateCriteria();
+                criteria.setOnDelayed(value != null);
                 break;
             case Masked:
-                criteria = toMaskedCriteria(value);
+                criteria = new AlarmStateCriteria();
+                criteria.setMasked(value != null);
                 break;
             case Filtered:
-                criteria = toFilteredCriteria(value);
+                criteria = new AlarmStateCriteria();
+                criteria.setFiltered(value != null);
                 break;
             case Disabled:
-                criteria = toDisabledCriteria(value);
+                criteria = new AlarmStateCriteria();
+                criteria.setDisabled(value != null);
                 break;
             default:
                 throw new RuntimeException("Unknown OverriddenAlarmType: " + key.getType());
         }
+
+        log.info("Return group by criteria: {}", criteria);
 
         return new KeyValue<>(key.getName(), criteria);
     }
@@ -247,32 +255,6 @@ public class AlarmStateProcessor {
         return criteria;
     }
 
-    private static AlarmStateCriteria toLatchedCriteria(OverriddenAlarmValue value) {
-        LatchedAlarm alarm = null;
-
-        if(value != null && value.getMsg() instanceof LatchedAlarm) {
-            alarm = (LatchedAlarm) value.getMsg();
-        }
-
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setLatched(alarm != null);
-
-        return criteria;
-    }
-
-    private static AlarmStateCriteria toOffDelayedCriteria(OverriddenAlarmValue value) {
-        OffDelayedAlarm alarm = null;
-
-        if(value != null && value.getMsg() instanceof OffDelayedAlarm) {
-            alarm = (OffDelayedAlarm) value.getMsg();
-        }
-
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setOffDelayed(alarm != null);
-
-        return criteria;
-    }
-
     private static AlarmStateCriteria toShelvedCriteria(OverriddenAlarmValue value) {
         ShelvedAlarm alarm = null;
 
@@ -284,63 +266,11 @@ public class AlarmStateProcessor {
 
         if(alarm != null) {
             if(alarm.getOneshot()) {
-                criteria.setContinuousShelved(true);
-            } else {
                 criteria.setOneshotShelved(true);
+            } else {
+                criteria.setContinuousShelved(true);
             }
         }
-
-        return criteria;
-    }
-
-    private static AlarmStateCriteria toOnDelayedCriteria(OverriddenAlarmValue value) {
-        OnDelayedAlarm alarm = null;
-
-        if(value != null && value.getMsg() instanceof OnDelayedAlarm) {
-            alarm = (OnDelayedAlarm) value.getMsg();
-        }
-
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setOnDelayed(alarm != null);
-
-        return criteria;
-    }
-
-    private static AlarmStateCriteria toMaskedCriteria(OverriddenAlarmValue value) {
-        MaskedAlarm alarm = null;
-
-        if(value != null && value.getMsg() instanceof MaskedAlarm) {
-            alarm = (MaskedAlarm)value.getMsg();
-        }
-
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setMasked(alarm != null);
-
-        return criteria;
-    }
-
-    private static AlarmStateCriteria toFilteredCriteria(OverriddenAlarmValue value) {
-        FilteredAlarm alarm = null;
-
-        if(value != null && value.getMsg() instanceof FilteredAlarm) {
-            alarm = (FilteredAlarm)value.getMsg();
-        }
-
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setFiltered(alarm != null);
-
-        return criteria;
-    }
-
-    private static AlarmStateCriteria toDisabledCriteria(OverriddenAlarmValue value) {
-        DisabledAlarm alarm = null;
-
-        if(value != null && value.getMsg() instanceof DisabledAlarm) {
-            alarm = (DisabledAlarm)value.getMsg();
-        }
-
-        AlarmStateCriteria criteria = new AlarmStateCriteria();
-        criteria.setDisabled(alarm != null);
 
         return criteria;
     }
