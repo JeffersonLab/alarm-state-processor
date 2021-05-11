@@ -38,7 +38,7 @@ public class AlarmStateProcessor {
     public static final SpecificAvroSerde<ShelvedAlarm> SHELVED_VALUE_SERDE = new SpecificAvroSerde<>();
 
     public static final Serdes.StringSerde OUTPUT_KEY_SERDE = new Serdes.StringSerde();
-    public static final Serdes.StringSerde OUTPUT_VALUE_SERDE = new Serdes.StringSerde();
+    public static final SpecificAvroSerde<AlarmStateValue> OUTPUT_VALUE_SERDE = new SpecificAvroSerde<>();
 
     static KafkaStreams streams;
 
@@ -153,6 +153,7 @@ public class AlarmStateProcessor {
         LATCHED_VALUE_SERDE.configure(config, false);
         DISABLED_VALUE_SERDE.configure(config, false);
         SHELVED_VALUE_SERDE.configure(config, false);
+        OUTPUT_VALUE_SERDE.configure(config, false);
 
         INPUT_KEY_OVERRIDDEN_SERDE.configure(config, true);
         INPUT_VALUE_OVERRIDDEN_SERDE.configure(config, false);
@@ -199,10 +200,10 @@ public class AlarmStateProcessor {
                 .transformValues(new MsgTransformerFactory(), Named.as("Key-Added-to-Value"));
 
         // Now Compute the state
-        final KTable<String, String> out = keyInValueStream.mapValues(new ValueMapper<AlarmStateCriteria, String>() {
+        final KTable<String, AlarmStateValue> out = keyInValueStream.mapValues(new ValueMapper<AlarmStateCriteria, AlarmStateValue>() {
             @Override
-            public String apply(AlarmStateCriteria value) {
-                String state = "null"; // This should never happen, right?
+            public AlarmStateValue apply(AlarmStateCriteria value) {
+                AlarmStateEnum state = null; // null should never happen, right?
 
                 if(value != null) {
                     AlarmStateCalculator calculator = new AlarmStateCalculator();
@@ -210,7 +211,7 @@ public class AlarmStateProcessor {
                     state = calculator.computeState();
                 }
 
-                return state;
+                return new AlarmStateValue(state);
             }
         }, Named.as("Compute-State"));
 

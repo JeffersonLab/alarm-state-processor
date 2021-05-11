@@ -15,7 +15,7 @@ public class AlarmStateProcessorTest {
     private TestInputTopic<String, RegisteredAlarm> registeredInputTopic;
     private TestInputTopic<String, ActiveAlarm> activeInputTopic;
     private TestInputTopic<OverriddenAlarmKey, OverriddenAlarmValue> overriddenInputTopic;
-    private TestOutputTopic<String, String> outputTopic;
+    private TestOutputTopic<String, AlarmStateValue> outputTopic;
     private Topology top;
     private RegisteredAlarm registeredAlarm1 = new RegisteredAlarm();
     private RegisteredAlarm registeredAlarm2 = new RegisteredAlarm();
@@ -66,18 +66,18 @@ public class AlarmStateProcessorTest {
     @Test
     public void testNormal() {
         registeredInputTopic.pipeInput("alarm1", registeredAlarm1);
-        KeyValue<String, String> result = outputTopic.readKeyValuesToList().get(0);
+        KeyValue<String, AlarmStateValue> result = outputTopic.readKeyValuesToList().get(0);
         Assert.assertEquals("alarm1", result.key);
-        Assert.assertEquals("Normal", result.value);
+        Assert.assertEquals(AlarmStateEnum.Normal, result.value.getType());
     }
 
     @Test
     public void testActive() {
         registeredInputTopic.pipeInput("alarm1", registeredAlarm1);
         activeInputTopic.pipeInput("alarm1", activeAlarm1);
-        KeyValue<String, String> result = outputTopic.readKeyValuesToList().get(1);
+        KeyValue<String, AlarmStateValue> result = outputTopic.readKeyValuesToList().get(1);
         Assert.assertEquals("alarm1", result.key);
-        Assert.assertEquals("Active", result.value);
+        Assert.assertEquals(AlarmStateEnum.Active, result.value.getType());
     }
 
     @Test
@@ -90,11 +90,11 @@ public class AlarmStateProcessorTest {
         overriddenAlarmValue1.setMsg(latchedAlarm);
         overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Latched), overriddenAlarmValue1);
 
-        List<KeyValue<String, String>> outList = outputTopic.readKeyValuesToList();
+        List<KeyValue<String, AlarmStateValue>> outList = outputTopic.readKeyValuesToList();
         Assert.assertEquals(3, outList.size());
-        KeyValue<String, String> result = outList.get(2);
+        KeyValue<String, AlarmStateValue> result = outList.get(2);
         Assert.assertEquals("alarm1", result.key);
-        Assert.assertEquals("Latched", result.value);
+        Assert.assertEquals(AlarmStateEnum.Latched, result.value.getType());
     }
 
     @Test
@@ -113,11 +113,11 @@ public class AlarmStateProcessorTest {
         overriddenAlarmValue2.setMsg(disabledAlarm);
         overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Disabled), overriddenAlarmValue2);
 
-        List<KeyValue<String, String>> outList = outputTopic.readKeyValuesToList();
+        List<KeyValue<String, AlarmStateValue>> outList = outputTopic.readKeyValuesToList();
         Assert.assertEquals(4, outList.size());
-        KeyValue<String, String> result = outList.get(3);
+        KeyValue<String, AlarmStateValue> result = outList.get(3);
         Assert.assertEquals("alarm1", result.key);
-        Assert.assertEquals("Disabled", result.value);
+        Assert.assertEquals(AlarmStateEnum.Disabled, result.value.getType());
     }
 
     @Test
@@ -139,10 +139,10 @@ public class AlarmStateProcessorTest {
 
         overriddenInputTopic.pipeInput(new OverriddenAlarmKey("alarm1", OverriddenAlarmType.Disabled), null);
 
-        List<KeyValue<String, String>> outList = outputTopic.readKeyValuesToList();
+        List<KeyValue<String, AlarmStateValue>> outList = outputTopic.readKeyValuesToList();
         Assert.assertEquals(5, outList.size());
-        KeyValue<String, String> result = outList.get(4);
+        KeyValue<String, AlarmStateValue> result = outList.get(4);
         Assert.assertEquals("alarm1", result.key);
-        Assert.assertEquals("Latched", result.value);
+        Assert.assertEquals(AlarmStateEnum.Latched, result.value.getType());
     }
 }

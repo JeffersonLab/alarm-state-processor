@@ -9,70 +9,70 @@ public class AlarmStateCalculator {
 
     private AlarmStateCriteria criteria = new AlarmStateCriteria();
 
-    public String computeState() {
+    public AlarmStateEnum computeState() {
 
         // Note: criteria are evaluated in increasing precedence order (last item, disabled, has highest precedence)
 
         // Should we have an Unregistered state or always default to Normal?
-        AlarmState state = AlarmState.Normal;
+        AlarmStateEnum state = AlarmStateEnum.Normal;
 
         if(criteria.getActive()) {
-            state = AlarmState.Active;
+            state = AlarmStateEnum.Active;
         }
 
         if(criteria.getOffDelayed()) {
             if(!criteria.getActive()) {  // Is this necessary?   If active then no need to incite active with OffDelay
-                state = AlarmState.OffDelayed;
+                state = AlarmStateEnum.OffDelayed;
             }
         }
 
         if(criteria.getLatched()) {
             if(criteria.getActive()) {
-                state = AlarmState.Latched;
+                state = AlarmStateEnum.Latched;
             } else {
-                state = AlarmState.NormalLatched;
+                state = AlarmStateEnum.NormalLatched;
             }
         }
 
         if(criteria.getOnDelayed()) {
             if(criteria.getActive()) {  // Is this necessary?   If not active then no need to suppress active with OnDelay
-                state = AlarmState.OnDelayed;
+                state = AlarmStateEnum.OnDelayed;
             }
         }
 
         if(criteria.getContinuousShelved()) {
             if(criteria.getActive()) {
-                state = AlarmState.ContinuousShelved;
+                state = AlarmStateEnum.ContinuousShelved;
             } else {
-                state = AlarmState.NormalContinuousShelved;
+                state = AlarmStateEnum.NormalContinuousShelved;
             }
         }
 
         if(criteria.getOneshotShelved()) {
             if(criteria.getActive()) { // Once no longer active the "one shot" is used up, right?
-                state = AlarmState.OneShotShelved;
+                state = AlarmStateEnum.OneShotShelved;
             }
         }
 
         if(criteria.getMasked()) {
             if(criteria.getActive()) { // Once no longer active then no longer masked, right?
-                state = AlarmState.Masked;
+                state = AlarmStateEnum.Masked;
             }
         }
 
         if(criteria.getFiltered()) {
             if(criteria.getActive()) {
-                state = AlarmState.Filtered;
+                state = AlarmStateEnum.Filtered;
             } else {
-                state = AlarmState.NormalFiltered;
+                state = AlarmStateEnum.NormalFiltered;
             }
         }
 
         if(criteria.getDisabled()) {
             if(criteria.getActive()) {
-                state = AlarmState.Disabled;
+                state = AlarmStateEnum.Disabled;
             } else {
-                state = AlarmState.NormalDisabled;
+                state = AlarmStateEnum.NormalDisabled;
             }
         }
 
@@ -89,7 +89,7 @@ public class AlarmStateCalculator {
         log.info("Disabled:            {}", criteria.getDisabled());
         log.info("Effective State:     {}", state.name());
 
-        return state.name();
+        return state;
     }
 
     public void append(AlarmStateCriteria criteria) {
