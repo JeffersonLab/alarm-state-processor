@@ -35,6 +35,7 @@ public class AlarmStateProcessorTest {
         overriddenInputTopic = testDriver.createInputTopic(AlarmStateProcessor.INPUT_TOPIC_OVERRIDDEN, AlarmStateProcessor.INPUT_KEY_OVERRIDDEN_SERDE.serializer(), AlarmStateProcessor.INPUT_VALUE_OVERRIDDEN_SERDE.serializer());
         outputTopic = testDriver.createOutputTopic(AlarmStateProcessor.OUTPUT_TOPIC, AlarmStateProcessor.OUTPUT_KEY_SERDE.deserializer(), AlarmStateProcessor.OUTPUT_VALUE_SERDE.deserializer());
 
+        registeredAlarm1.setClass$(AlarmClass.Base_Class);
         registeredAlarm1.setPriority(AlarmPriority.P3_MINOR);
         registeredAlarm1.setCategory(AlarmCategory.Aperture);
         registeredAlarm1.setLocation(AlarmLocation.A1);
@@ -44,9 +45,7 @@ public class AlarmStateProcessorTest {
         registeredAlarm1.setFilterable(false);
         registeredAlarm1.setLatching(false);
         registeredAlarm1.setMaskedby(null);
-        registeredAlarm1.setPointofcontactemail("");
-        registeredAlarm1.setPointofcontactfirstname("");
-        registeredAlarm1.setPointofcontactlastname("");
+        registeredAlarm1.setPointofcontactusername("tester");
         registeredAlarm1.setScreenpath("/");
 
         activeAlarm1.setMsg(new SimpleAlarming());

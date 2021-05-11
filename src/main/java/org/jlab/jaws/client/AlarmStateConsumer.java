@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 public class AlarmStateConsumer {
 
@@ -33,8 +34,8 @@ public class AlarmStateConsumer {
 
         consumer.addListener(new EventSourceListener<>() {
             @Override
-            public void update(List<EventSourceRecord<String, String>> changes) {
-                for (EventSourceRecord<String, String> record : changes) {
+            public void initialState(Set<EventSourceRecord<String, String>> records) {
+                for (EventSourceRecord<String, String> record : records) {
                     String key = record.getKey();
                     String value = record.getValue();
                     System.out.println(key + "=" + value);
